@@ -1,0 +1,1966 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lumora — A quiet room for focused minds</title>
+ 
+<!-- PWA: installable, works offline, own icon on the home screen -->
+<meta name="theme-color" content="#0F172A">
+<meta name="description" content="A quiet room for focused minds. A premium, distraction-free study timer.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lumora">
+<meta name="mobile-web-app-capable" content="yes">
+ 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   LUMORA — design tokens
+   ============================================================ */
+:root{
+  --indigo:#4F46E5; --violet:#7C3AED; --mint:#14B8A6; --danger:#EF4444;
+  --r-sm:10px; --r-md:16px; --r-lg:22px; --r-xl:30px;
+  --gap:14px;
+  --ff-ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --ff-head:'Plus Jakarta Sans','Inter',system-ui,sans-serif;
+  --ease:cubic-bezier(.22,.8,.3,1);
+  --speed:.28s;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+ 
+/* dark (default) */
+:root{
+  --bg:#0F172A; --bg-deep:#0A1020;
+  --surface:rgba(255,255,255,.045); --surface-2:rgba(255,255,255,.075);
+  --border:rgba(255,255,255,.09); --border-soft:rgba(255,255,255,.055);
+  --text:#F8FAFC; --text-2:#94A3B8; --text-3:#64748B;
+  --shadow:0 18px 48px -18px rgba(0,0,0,.75);
+  --glow:rgba(124,58,237,.30);
+  --track:rgba(255,255,255,.08);
+}
+/* respect the viewer's OS setting only when the user hasn't chosen */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]):not([data-theme="light"]){ color-scheme:light }
+}
+html[data-theme="light"]{
+  --bg:#F8FAFC; --bg-deep:#EEF2F8;
+  --surface:#FFFFFF; --surface-2:#F1F5F9;
+  --border:#E2E8F0; --border-soft:#EDF1F6;
+  --text:#0F172A; --text-2:#475569; --text-3:#7C8BA1;
+  --shadow:0 16px 40px -20px rgba(15,23,42,.30);
+  --glow:rgba(79,70,229,.22);
+  --track:rgba(15,23,42,.09);
+  color-scheme:light;
+}
+html[data-theme="dark"]{color-scheme:dark}
+ 
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--ff-ui); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+ 
+/* ambient page wash — the only decorative gradient outside focus mode */
+body::before{
+  content:'';position:fixed;inset:-20%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(45% 38% at 18% 6%, rgba(79,70,229,.30), transparent 68%),
+    radial-gradient(42% 34% at 88% 16%, rgba(124,58,237,.24), transparent 66%),
+    radial-gradient(50% 40% at 50% 104%, rgba(20,184,166,.13), transparent 70%);
+  filter:blur(6px);
+}
+html[data-theme="light"] body::before{opacity:.5}
+html[data-anim="off"] body::before{opacity:.28}
+ 
+/* ============================================================
+   App shell
+   ============================================================ */
+#app{position:relative;z-index:1;min-height:100%;display:flex;flex-direction:column}
+.screen{display:none;flex:1;padding:22px 20px 112px;max-width:560px;width:100%;margin:0 auto}
+.screen.on{display:block}
+@media(min-width:900px){ .screen{max-width:880px;padding:40px 32px 130px} }
+ 
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--ff-head);font-weight:800;font-size:19px;letter-spacing:-.02em}
+.brand svg{width:26px;height:26px;flex:none}
+h1{font-family:var(--ff-head);font-size:27px;font-weight:700;letter-spacing:-.025em;margin:0 0 4px}
+h2{font-family:var(--ff-head);font-size:16px;font-weight:700;letter-spacing:-.01em;margin:0 0 12px}
+.sub{color:var(--text-2);margin:0 0 22px;font-size:14.5px}
+.section{margin-bottom:26px}
+.label{font-size:12.5px;color:var(--text-3);font-weight:500;margin-bottom:9px}
+ 
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;box-shadow:var(--shadow)}
+html[data-theme="dark"] .card{backdrop-filter:blur(14px)}
+ 
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.chips.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.chips.grid2 .chip{justify-content:flex-start;min-width:0}
+.chips.grid2 .chip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{
+  display:inline-flex;align-items:center;gap:8px;padding:11px 15px;min-height:44px;
+  border-radius:999px;border:1px solid var(--border);background:var(--surface);
+  font-size:14px;font-weight:500;transition:transform var(--speed) var(--ease),border-color var(--speed),background var(--speed);
+}
+.chip:hover{border-color:var(--text-3)}
+.chip:active{transform:scale(.96)}
+.chip[aria-pressed="true"]{border-color:transparent;background:var(--surface-2);box-shadow:inset 0 0 0 1.5px var(--sc,var(--indigo));color:var(--text)}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:var(--sc,var(--indigo));flex:none}
+.chip.ghost{border-style:dashed;color:var(--text-2)}
+ 
+/* the hero action */
+.start{
+  position:relative;width:100%;min-height:62px;margin-top:8px;border-radius:var(--r-xl);
+  background:linear-gradient(115deg,#3F35D9 0%,var(--indigo) 38%,var(--violet) 100%);
+  color:#fff;font-family:var(--ff-head);font-weight:800;font-size:16.5px;letter-spacing:.01em;
+  box-shadow:0 14px 34px -12px var(--glow),inset 0 1px 0 rgba(255,255,255,.22);
+  transition:transform .2s var(--ease),box-shadow .3s var(--ease);
+}
+.start:hover{box-shadow:0 20px 44px -12px var(--glow),inset 0 1px 0 rgba(255,255,255,.28)}
+.start:active{transform:scale(.978)}
+.start:disabled{opacity:.45;box-shadow:none}
+ 
+.btn{padding:12px 18px;min-height:46px;border-radius:14px;border:1px solid var(--border);background:var(--surface);font-weight:600;font-size:14.5px;transition:transform .2s var(--ease),border-color .2s}
+.btn:active{transform:scale(.97)}
+.btn:hover{border-color:var(--text-3)}
+.btn.solid{background:linear-gradient(115deg,var(--indigo),var(--violet));border-color:transparent;color:#fff}
+.btn.mint{background:var(--mint);border-color:transparent;color:#04211E}
+.btn.danger{color:var(--danger);border-color:rgba(239,68,68,.35)}
+.btn.wide{width:100%}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+ 
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap)}
+@media(min-width:620px){ .stats{grid-template-columns:repeat(4,1fr)} }
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:15px}
+.stat b{display:block;font-family:var(--ff-head);font-size:25px;font-weight:700;letter-spacing:-.03em;line-height:1.15}
+.stat span{font-size:12.5px;color:var(--text-3)}
+ 
+/* goal meter */
+.meter{height:11px;border-radius:999px;background:var(--track);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--indigo),var(--violet));transition:width .7s var(--ease)}
+.meter.done i{background:linear-gradient(90deg,var(--mint),#22D3A5)}
+ 
+/* subject time list */
+.list{display:flex;flex-direction:column;gap:2px}
+.line{display:flex;align-items:center;gap:11px;padding:11px 2px}
+.line + .line{border-top:1px solid var(--border-soft)}
+.line .nm{flex:1;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.line .vl{color:var(--text-2);font-variant-numeric:tabular-nums;font-size:14px}
+.bar{height:6px;border-radius:999px;background:var(--track);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;border-radius:999px}
+ 
+/* weekly chart */
+.week{display:flex;align-items:flex-end;gap:7px;height:132px;margin-top:6px;min-width:0}
+.week .col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%}
+.week .stack{flex:1;width:100%;min-width:0;display:flex;align-items:flex-end}
+.week .fill{width:100%;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,var(--violet),var(--indigo));min-height:3px;transition:height .6s var(--ease)}
+.week .col.today .fill{background:linear-gradient(180deg,#2DD4BF,var(--mint))}
+.week .col.zero .fill{background:var(--track)}
+.week .d{font-size:11px;color:var(--text-3);font-weight:500;max-width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap}
+ 
+/* tasks */
+.task{display:flex;align-items:flex-start;gap:12px;padding:13px 0}
+.task + .task{border-top:1px solid var(--border-soft)}
+.check{width:23px;height:23px;flex:none;margin-top:1px;border-radius:7px;border:1.6px solid var(--border);display:grid;place-items:center;transition:all .2s var(--ease)}
+.check svg{width:13px;height:13px;stroke-dasharray:22;stroke-dashoffset:22;stroke:#fff}
+.task.done .check{background:var(--mint);border-color:var(--mint)}
+.task.done .check svg{stroke-dashoffset:0;transition:stroke-dashoffset .35s var(--ease)}
+.task.done .tt{text-decoration:line-through;color:var(--text-3)}
+.tmeta{font-size:12.5px;color:var(--text-3);margin-top:3px}
+.tbody{flex:1;min-width:0}
+.tt{font-weight:500;overflow-wrap:anywhere}
+ 
+/* inputs */
+.field{display:flex;gap:9px;align-items:center}
+.input{flex:1;padding:12px 14px;min-height:46px;border-radius:14px;border:1px solid var(--border);background:var(--surface-2);width:100%}
+.input::placeholder{color:var(--text-3)}
+.num{width:82px;text-align:center;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);font-variant-numeric:tabular-nums}
+ 
+/* settings rows */
+.set{display:flex;align-items:center;gap:14px;padding:14px 0}
+.set + .set{border-top:1px solid var(--border-soft)}
+.set .sl{flex:1;min-width:0}
+.set .sl b{display:block;font-weight:500;font-size:14.5px}
+.set .sl span{font-size:12.5px;color:var(--text-3)}
+.sw{width:48px;height:29px;border-radius:999px;background:var(--track);position:relative;flex:none;transition:background .25s var(--ease)}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .25s var(--ease)}
+.sw[aria-checked="true"]{background:linear-gradient(90deg,var(--indigo),var(--violet))}
+.sw[aria-checked="true"]::after{transform:translateX(19px)}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:3px;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:none;white-space:nowrap}
+@media(max-width:400px){
+  .set{flex-wrap:wrap}
+  .set .sl{flex-basis:100%}
+  .set .seg,.set input[type="range"]{width:100%}
+}
+.seg button{padding:8px 13px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--text-2);min-height:38px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.18)}
+html[data-theme="light"] .seg button[aria-pressed="true"]{background:#fff}
+ 
+/* nav */
+.nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:flex;justify-content:center;gap:4px;
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
+  background:color-mix(in srgb,var(--bg) 88%, transparent);
+  backdrop-filter:blur(18px);border-top:1px solid var(--border-soft);
+}
+.nav button{flex:1;max-width:132px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0 5px;color:var(--text-3);font-size:11px;font-weight:500;border-radius:12px;min-height:50px}
+.nav button svg{width:21px;height:21px}
+.nav button[aria-current="page"]{color:var(--text)}
+.nav button[aria-current="page"] svg{stroke:url(#navgrad)}
+ 
+/* ============================================================
+   FOCUS MODE — owns the whole screen
+   ============================================================ */
+.focus{
+  position:fixed;inset:0;z-index:100;display:none;
+  background:var(--bg-deep);color:#F8FAFC;
+  padding:calc(24px + env(safe-area-inset-top,0px)) 22px calc(24px + env(safe-area-inset-bottom,0px));
+}
+html[data-theme="light"] .focus{background:#0F172A}
+.focus.on{display:block}
+#fxCanvas,.fxbg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.fxbg span{
+  position:absolute;border-radius:50%;filter:blur(72px);opacity:.55;
+  animation:drift 26s var(--ease) infinite alternate;
+}
+.fxbg span:nth-child(1){width:60vmin;height:60vmin;left:-14vmin;top:-10vmin;background:#4F46E5}
+.fxbg span:nth-child(2){width:54vmin;height:54vmin;right:-12vmin;top:18vmin;background:#7C3AED;animation-duration:32s;animation-delay:-8s}
+.fxbg span:nth-child(3){width:64vmin;height:64vmin;left:16vmin;bottom:-24vmin;background:#312E81;animation-duration:38s;animation-delay:-16s}
+@keyframes drift{ from{transform:translate3d(0,0,0) scale(1)} to{transform:translate3d(5vmin,-6vmin,0) scale(1.16)} }
+.focus[data-phase="break"] .fxbg span:nth-child(1){background:#0D9488}
+.focus[data-phase="break"] .fxbg span:nth-child(2){background:#14B8A6}
+.focus[data-phase="break"] .fxbg span:nth-child(3){background:#134E4A}
+.fxbg span{transition:background 1.1s var(--ease)}
+html[data-anim="off"] .fxbg span{animation:none;opacity:.42}
+html[data-anim="off"] #fxCanvas{display:none}
+ 
+.fxwrap{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(18px,3.4vh,34px);text-align:center;max-width:620px;margin:0 auto}
+.fxsubject{font-family:var(--ff-head);font-weight:700;font-size:clamp(15px,2.4vmin,19px);letter-spacing:.16em;text-transform:uppercase;color:rgba(248,250,252,.82)}
+.fxtask{font-size:13.5px;color:rgba(248,250,252,.55);margin-top:5px;max-width:34ch}
+ 
+.ringbox{position:relative;width:min(78vmin,420px);aspect-ratio:1}
+.ringbox svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:rgba(255,255,255,.10);stroke-width:3.2}
+.ring-prog{fill:none;stroke:url(#ringgrad);stroke-width:3.2;stroke-linecap:round;
+  filter:drop-shadow(0 0 7px rgba(124,58,237,.65));
+  transition:stroke-dashoffset .3s linear}
+.focus[data-phase="break"] .ring-prog{stroke:url(#ringmint);filter:drop-shadow(0 0 7px rgba(20,184,166,.6))}
+.ringcore{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.fxtime{
+  font-size:clamp(56px,17.5vmin,132px);font-weight:200;letter-spacing:-.045em;line-height:1;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+}
+.fxphase{font-size:clamp(11px,2vmin,13.5px);letter-spacing:.24em;text-transform:uppercase;color:rgba(248,250,252,.6);font-weight:600}
+.breathe{animation:breathe 5.2s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.86}}
+html[data-anim="off"] .breathe{animation:none}
+.focus.paused .ringbox{opacity:.46;transition:opacity .35s var(--ease)}
+.focus.paused .ring-prog{filter:none}
+ 
+.dots{display:flex;gap:8px;align-items:center;justify-content:center}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .4s var(--ease)}
+.dots i.done{background:rgba(255,255,255,.75)}
+.dots i.now{background:#fff;width:26px;border-radius:999px;box-shadow:0 0 12px rgba(255,255,255,.55)}
+.fxmeta{font-size:13px;color:rgba(248,250,252,.62);font-variant-numeric:tabular-nums}
+.fxnext{font-size:12.5px;color:rgba(248,250,252,.45)}
+.fxctl{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+.fbtn{
+  min-width:140px;min-height:52px;padding:14px 26px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);
+  color:#F8FAFC;font-weight:700;font-size:14.5px;letter-spacing:.06em;text-transform:uppercase;
+  backdrop-filter:blur(10px);transition:transform .2s var(--ease),background .2s
+}
+.fbtn:hover{background:rgba(255,255,255,.15)}
+.fbtn:active{transform:scale(.96)}
+.fbtn.primary{background:#F8FAFC;color:#14163A;border-color:transparent}
+.fbtn.primary:hover{background:#fff}
+.fbtn.quiet{min-width:0;border-color:transparent;background:none;color:rgba(248,250,252,.55);text-transform:none;letter-spacing:0;font-weight:500}
+.fbtn.quiet:hover{color:#F8FAFC;background:rgba(255,255,255,.07)}
+ 
+/* focus corner controls */
+.fxtop{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 6px;z-index:3}
+.icobtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:rgba(248,250,252,.62);transition:background .2s,color .2s}
+.icobtn:hover{background:rgba(255,255,255,.1);color:#fff}
+.icobtn svg{width:20px;height:20px}
+.icobtn[aria-pressed="true"]{color:var(--mint)}
+ 
+/* completion / break panels */
+.panel{position:relative;display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.6vh,26px);text-align:center;max-width:460px;margin:0 auto}
+.seal{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2)}
+.seal svg{width:42px;height:42px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:draw .55s .12s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+html[data-anim="off"] .seal svg{animation:none;stroke-dashoffset:0}
+.seal.mint{background:rgba(20,184,166,.16);border-color:rgba(20,184,166,.45)}
+.ptitle{font-family:var(--ff-head);font-size:clamp(20px,4.6vmin,30px);font-weight:700;letter-spacing:-.02em}
+.pbig{font-size:clamp(40px,11vmin,74px);font-weight:200;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.psub{color:rgba(248,250,252,.66);font-size:14.5px}
+.tips{display:flex;flex-direction:column;gap:9px;text-align:left;width:100%;max-width:290px}
+.tips div{display:flex;gap:11px;align-items:center;color:rgba(248,250,252,.78);font-size:14.5px}
+.tips i{width:6px;height:6px;border-radius:50%;background:var(--mint);flex:none}
+ 
+/* modal */
+.modal{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(5,8,20,.68);backdrop-filter:blur(6px)}
+.modal.on{display:flex}
+.modal .box{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px;max-width:380px;width:100%;box-shadow:var(--shadow)}
+.modal h3{font-family:var(--ff-head);margin:0 0 8px;font-size:19px;font-weight:700}
+.modal p{margin:0 0 20px;color:var(--text-2);font-size:14.5px}
+ 
+/* toast */
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);z-index:300;
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:999px;
+  font-size:14px;font-weight:500;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:all .3s var(--ease);backdrop-filter:blur(14px);max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.focus.on ~ .toast{bottom:calc(30px + env(safe-area-inset-bottom,0px))}
+ 
+/* onboarding */
+.ob{position:fixed;inset:0;z-index:150;display:none;background:var(--bg-deep);color:#F8FAFC;
+  padding:calc(30px + env(safe-area-inset-top,0px)) 24px calc(30px + env(safe-area-inset-bottom,0px))}
+.ob.on{display:block}
+.obwrap{position:relative;height:100%;max-width:440px;margin:0 auto;display:flex;flex-direction:column}
+.obbody{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;overflow-y:auto;padding:12px 0}
+.obbody h2{font-family:var(--ff-head);font-size:clamp(26px,6.4vmin,36px);line-height:1.18;font-weight:700;letter-spacing:-.03em;margin:0;color:#fff}
+.obbody p{color:rgba(248,250,252,.62);margin:0;font-size:15px}
+.obbody .chip{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#F8FAFC}
+.obbody .chip[aria-pressed="true"]{background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1.5px #fff}
+.obbody .input{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
+.obdots{display:flex;gap:6px;justify-content:center;padding:14px 0}
+.obdots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.22)}
+.obdots i.on{background:#fff;width:20px;border-radius:999px}
+.mode-opt{display:block;width:100%;text-align:left;padding:16px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);transition:all .2s var(--ease)}
+.mode-opt[aria-pressed="true"]{background:rgba(255,255,255,.14);border-color:#fff}
+.mode-opt b{display:block;font-family:var(--ff-head);font-weight:700;font-size:16px;margin-bottom:3px}
+.mode-opt span{font-size:13.5px;color:rgba(248,250,252,.6)}
+ 
+.empty{text-align:center;padding:38px 18px;color:var(--text-3)}
+.empty b{display:block;color:var(--text-2);font-weight:600;margin-bottom:5px;font-size:15px}
+ 
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+ 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/><stop offset="55%" stop-color="#7C3AED"/><stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="ringmint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14B8A6"/><stop offset="100%" stop-color="#5EEAD4"/>
+    </linearGradient>
+    <linearGradient id="navgrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/><stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+  </defs>
+</svg>
+ 
+<div id="app">
+  <section id="s-home" class="screen on"></section>
+  <section id="s-tasks" class="screen"></section>
+  <section id="s-history" class="screen"></section>
+  <section id="s-settings" class="screen"></section>
+</div>
+ 
+<nav class="nav" id="nav" aria-label="Main"></nav>
+ 
+<div class="focus" id="focus" aria-live="polite"></div>
+<div class="ob" id="ob"></div>
+<div class="modal" id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+ 
+<script>
+/* ============================================================
+   LUMORA — study timer
+   Layers: Store → State → TimerEngine → Audio/Notify/Wake → UI
+   The engine is timestamp-based and never trusts an interval.
+   ============================================================ */
+(function () {
+"use strict";
+ 
+/* ---------- tiny helpers ---------- */
+const $ = (s, r) => (r || document).querySelector(s);
+const el = (id) => document.getElementById(id);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const now = () => Date.now();
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+ 
+function fmtClock(ms) {
+  ms = Math.max(0, ms);
+  const t = Math.round(ms / 1000);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return h > 0 ? h + ":" + p(m) + ":" + p(s) : p(m) + ":" + p(s);
+}
+function fmtDur(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return mins + "m";
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m ? h + "h " + m + "m" : h + "h";
+}
+function fmtDurLong(ms) {
+  const mins = Math.floor(ms / 60000);
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return (h > 0 ? h + "h " : "") + String(m).padStart(h > 0 ? 2 : 1, "0") + "m";
+}
+const dayKey = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+ 
+/* ---------- icons ---------- */
+const I = {
+  logo: '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 4a12 12 0 1 0 10.4 6" stroke="url(#ringgrad)" stroke-width="3.4" stroke-linecap="round"/><circle cx="26.4" cy="10" r="3.1" fill="#14B8A6"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.8V20h14V9.8"/></svg>',
+  task: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 7 2 2 3.5-3.5"/><path d="m3.5 17 2 2L9 15.5"/><path d="M12.5 7.2H21M12.5 17.2H21"/></svg>',
+  hist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20v-6M12 20V5M19 20v-9"/></svg>',
+  set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-1 1.46V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.77.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.46-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.46-1.05 1.6 1.6 0 0 0-.32-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.6 1.6 0 0 0 1.77.32H9a1.6 1.6 0 0 0 1-1.46V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.46 1.6 1.6 0 0 0 1.77-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.32 1.77V9a1.6 1.6 0 0 0 1.46 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.46 1z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>',
+  sound: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  mute: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 10 5 5M21 10l-5 5"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+};
+ 
+/* ============================================================
+   1. STORE — localStorage with graceful degradation
+   ============================================================ */
+const Store = (function () {
+  const mem = {};
+  let warned = false;
+  function fail() {
+    if (!warned) { warned = true; setTimeout(() => toast("Storage is unavailable — this session won't be saved."), 900); }
+  }
+  return {
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw == null) return key in mem ? mem[key] : fallback;
+        return JSON.parse(raw);
+      } catch (e) { fail(); return key in mem ? mem[key] : fallback; }
+    },
+    set(key, val) {
+      mem[key] = val;
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { fail(); }
+    },
+    del(key) { delete mem[key]; try { localStorage.removeItem(key); } catch (e) { } }
+  };
+})();
+ 
+/* ============================================================
+   2. STATE
+   ============================================================ */
+const DEFAULT_SUBJECTS = [
+  { id: "sb1", name: "Mathematics", color: "#6366F1" },
+  { id: "sb2", name: "Physics", color: "#3B82F6" },
+  { id: "sb3", name: "Chemistry", color: "#A855F7" },
+  { id: "sb4", name: "Programming", color: "#06B6D4" },
+  { id: "sb5", name: "English", color: "#8B5CF6" },
+  { id: "sb6", name: "Revision", color: "#14B8A6" },
+];
+const PALETTE = ["#6366F1", "#3B82F6", "#A855F7", "#06B6D4", "#8B5CF6", "#14B8A6", "#F59E0B", "#EC4899"];
+ 
+const DEFAULT_SETTINGS = {
+  focusMin: 25, shortMin: 5, longMin: 15, sessions: 4,
+  deepMin: 50, countMin: 90,
+  theme: "system", animations: true, gradientIntensity: "full",
+  ambient: "none", ambientVol: 0.45, audioMuted: false, completionSound: true, haptics: true,
+  autoBreak: true, autoFocus: false, keepAwake: true,
+  notifyFocus: true, notifyBreak: true,
+  dailyGoalMin: 180,
+};
+ 
+let S = {
+  onboarded: Store.get("lumora.onboarded", false),
+  subjects: Store.get("lumora.subjects", DEFAULT_SUBJECTS),
+  tasks: Store.get("lumora.tasks", []),
+  sessions: Store.get("lumora.sessions", []),
+  settings: Object.assign({}, DEFAULT_SETTINGS, Store.get("lumora.settings", {})),
+  draft: Object.assign({ subjectId: "sb1", taskId: null, mode: "pomodoro", minutes: 25, sessions: 4 }, Store.get("lumora.draft", {})),
+};
+function persist(what) {
+  if (!what || what === "subjects") Store.set("lumora.subjects", S.subjects);
+  if (!what || what === "tasks") Store.set("lumora.tasks", S.tasks);
+  if (!what || what === "sessions") Store.set("lumora.sessions", S.sessions);
+  if (!what || what === "settings") Store.set("lumora.settings", S.settings);
+  if (!what || what === "draft") Store.set("lumora.draft", S.draft);
+}
+const subjectById = (id) => S.subjects.find(s => s.id === id) || S.subjects[0] || { id: "x", name: "Study", color: "#6366F1" };
+const taskById = (id) => S.tasks.find(t => t.id === id) || null;
+ 
+/* ============================================================
+   3. STATISTICS
+   ============================================================ */
+const Stats = {
+  onDay(ts) {
+    const k = dayKey(ts);
+    return S.sessions.filter(s => dayKey(s.completedAt) === k);
+  },
+  totalMs(list) { return list.reduce((a, s) => a + s.actualMs, 0); },
+  between(fromTs, toTs) { return S.sessions.filter(s => s.completedAt >= fromTs && s.completedAt < toTs); },
+  bySubject(list) {
+    const map = {};
+    list.forEach(s => { map[s.subjectId] = (map[s.subjectId] || 0) + s.actualMs; });
+    return Object.keys(map).map(id => ({ subject: subjectById(id), ms: map[id] })).sort((a, b) => b.ms - a.ms);
+  },
+  streak() {
+    if (!S.sessions.length) return { current: 0, longest: 0 };
+    const days = {};
+    S.sessions.forEach(s => { days[dayKey(s.completedAt)] = true; });
+    const keys = Object.keys(days).sort();
+    // longest run of consecutive days
+    let longest = 0, run = 0, prev = null;
+    keys.forEach(k => {
+      const t = new Date(k + "T00:00:00").getTime();
+      run = (prev !== null && t - prev === 86400000) ? run + 1 : 1;
+      prev = t; longest = Math.max(longest, run);
+    });
+    // current streak counts back from today (or yesterday if nothing today yet)
+    let cur = 0, cursor = startOfDay(now());
+    if (!days[dayKey(cursor)]) cursor -= 86400000;
+    while (days[dayKey(cursor)]) { cur++; cursor -= 86400000; }
+    return { current: cur, longest: Math.max(longest, cur) };
+  },
+  week() {
+    const out = [];
+    const today = startOfDay(now());
+    const monday = today - ((new Date(today).getDay() + 6) % 7) * 86400000;
+    for (let i = 0; i < 7; i++) {
+      const d = monday + i * 86400000;
+      out.push({ ts: d, label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i], ms: Stats.totalMs(Stats.between(d, d + 86400000)), today: d === today });
+    }
+    return out;
+  }
+};
+ 
+/* ============================================================
+   4. AUDIO — procedural ambience + completion tones (no assets)
+   ============================================================ */
+const Sound = (function () {
+  let ctx = null, chain = null, master = null, available = true;
+  const PRESETS = {
+    rain: { noise: "white", filter: ["lowpass", 5000, 0.8], hp: 320, lfo: [0.22, 0.16] },
+    ocean: { noise: "brown", filter: ["lowpass", 760, 0.9], lfo: [0.09, 0.55] },
+    forest: { noise: "white", filter: ["bandpass", 1900, 0.65], lfo: [0.14, 0.32] },
+    library: { noise: "brown", filter: ["lowpass", 300, 0.7], lfo: [0.05, 0.14] },
+    brown: { noise: "brown", filter: ["lowpass", 1500, 0.7] },
+    white: { noise: "white", filter: ["lowpass", 12000, 0.7] },
+    cafe: { noise: "brown", filter: ["bandpass", 720, 0.5], lfo: [0.3, 0.3] },
+    fan: { noise: "brown", filter: ["lowpass", 950, 1.1], lfo: [5.5, 0.05] },
+  };
+  const LABELS = { none: "Off", rain: "Rain", ocean: "Ocean", forest: "Forest", library: "Library", brown: "Brown noise", white: "White noise", cafe: "Cafe", fan: "Soft fan" };
+ 
+  function ac() {
+    if (ctx) return ctx;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) { available = false; return null; }
+      ctx = new C();
+    } catch (e) { available = false; return null; }
+    return ctx;
+  }
+  function noiseBuffer(c, kind) {
+    const len = c.sampleRate * 4;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    if (kind === "brown") {
+      let last = 0;
+      for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.4; }
+    } else {
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return buf;
+  }
+  function stop() {
+    if (!chain) return;
+    try {
+      chain.gain.gain.cancelScheduledValues(ctx.currentTime);
+      chain.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
+      const c = chain; chain = null;
+      setTimeout(() => { try { c.src.stop(); c.lfo && c.lfo.stop(); } catch (e) { } }, 900);
+    } catch (e) { chain = null; }
+  }
+  function start(name) {
+    stop();
+    if (!name || name === "none") return;
+    const c = ac(); if (!c) { toast("Sound isn't available on this device."); return; }
+    if (c.state === "suspended") c.resume().catch(() => { });
+    const p = PRESETS[name]; if (!p) return;
+    try {
+      const src = c.createBufferSource();
+      src.buffer = noiseBuffer(c, p.noise); src.loop = true;
+      let node = src;
+      if (p.hp) { const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = p.hp; node.connect(hp); node = hp; }
+      const f = c.createBiquadFilter();
+      f.type = p.filter[0]; f.frequency.value = p.filter[1]; f.Q.value = p.filter[2];
+      node.connect(f);
+      const gain = c.createGain();
+      gain.gain.value = 0;
+      f.connect(gain); gain.connect(c.destination);
+      const vol = S.settings.ambientVol;
+      gain.gain.setTargetAtTime(vol, c.currentTime, 1.1);
+      let lfo = null;
+      if (p.lfo) {
+        lfo = c.createOscillator(); lfo.frequency.value = p.lfo[0];
+        const amt = c.createGain(); amt.gain.value = vol * p.lfo[1];
+        lfo.connect(amt); amt.connect(gain.gain); lfo.start();
+      }
+      src.start();
+      chain = { src, gain, lfo };
+    } catch (e) { available = false; toast("Sound isn't available on this device."); }
+  }
+  function setVol(v) {
+    if (chain && ctx) { try { chain.gain.gain.setTargetAtTime(v, ctx.currentTime, 0.12); } catch (e) { } }
+  }
+  function tone(freqs, dur, peak) {
+    if (!S.settings.completionSound || S.settings.audioMuted) return;
+    const c = ac(); if (!c) return;
+    if (c.state === "suspended") c.resume().catch(() => { });
+    try {
+      freqs.forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        const t0 = c.currentTime + i * 0.17;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(peak, t0 + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        o.connect(g); g.connect(c.destination);
+        o.start(t0); o.stop(t0 + dur + 0.05);
+      });
+    } catch (e) { }
+  }
+  return {
+    LABELS, start, stop, setVol,
+    resume() { const c = ac(); if (c && c.state === "suspended") c.resume().catch(() => { }); },
+    focusDone() { tone([587.33, 783.99, 1046.5], 1.5, 0.16); buzz([30, 60, 30]); },
+    breakDone() { tone([440, 659.25], 1.1, 0.13); buzz([22]); },
+    routineDone() { tone([523.25, 659.25, 783.99, 1046.5], 2.1, 0.19); buzz([40, 70, 40, 70, 60]); },
+    tick() { tone([880], 0.28, 0.07); },
+    get playing() { return !!chain; }
+  };
+  function buzz(pattern) {
+    if (!S.settings.haptics) return;
+    try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) { }
+  }
+})();
+/* ============================================================
+   CUSTOM USER AUDIO
+   ============================================================ */
+const CustomAudio = (() => {
+  const DB_NAME = "LumoraCustomAudioDB";
+  const STORE_NAME = "audio";
+  const AUDIO_KEY = "custom";
+
+  let audio = null;
+  let objectUrl = "";
+  let fileName = "";
+  let dbPromise = null;
+
+  function openDB() {
+    if (dbPromise) return dbPromise;
+
+    dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB is not supported by this browser."));
+        return;
+      }
+
+      const request = indexedDB.open(DB_NAME, 1);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Could not open audio storage."));
+    });
+
+    return dbPromise;
+  }
+
+  async function dbGet() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).get(AUDIO_KEY);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error("Could not read audio storage."));
+    });
+  }
+
+  async function dbPut(record) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(record, AUDIO_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error("Could not save audio."));
+      tx.onabort = () => reject(tx.error || new Error("Could not save audio."));
+    });
+  }
+
+  async function dbDelete() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).delete(AUDIO_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error("Could not remove audio."));
+      tx.onabort = () => reject(tx.error || new Error("Could not remove audio."));
+    });
+  }
+
+  function updateStatus() {
+    const status = document.getElementById("customSoundStatus");
+    if (!status) return;
+    status.textContent = fileName
+      ? "Selected: " + fileName
+      : "No custom audio selected";
+  }
+
+  function destroyAudio() {
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (e) { }
+      audio = null;
+    }
+
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = "";
+    }
+  }
+
+  async function ensureAudio() {
+    if (audio) return audio;
+
+    const record = await dbGet();
+    if (!record || !record.blob) return null;
+
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(record.blob);
+
+    audio = new Audio(objectUrl);
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.volume = S.settings.ambientVol;
+
+    fileName = record.name || fileName || "Custom audio";
+    updateStatus();
+
+    return audio;
+  }
+
+  async function save(file) {
+    if (!file) return;
+
+    if (!file.type || !file.type.startsWith("audio/")) {
+      toast("Please select an audio file.");
+      return;
+    }
+
+    try {
+      await dbPut({
+        blob: file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        savedAt: Date.now()
+      });
+
+      destroyAudio();
+      fileName = file.name;
+      updateStatus();
+      toast("Custom audio added.");
+    } catch (e) {
+      console.error("Lumora custom audio save failed:", e);
+      toast("Could not save this audio file on your device.");
+    }
+  }
+
+  async function play(options = {}) {
+    if (S.settings.audioMuted) return;
+    try {
+      const a = await ensureAudio();
+
+      if (!a) {
+        toast("Choose a custom audio file first.");
+        return;
+      }
+
+      /* A new focus session must always start the custom track from the
+         beginning. This also fixes the case where the previous session
+         reached the end of the track before the next session started. */
+      if (options.restart !== false) {
+        try {
+          a.pause();
+          a.currentTime = 0;
+        } catch (e) { }
+      }
+
+      a.loop = true;
+      a.volume = S.settings.ambientVol;
+
+      /* If the browser has moved the media element to an ended state,
+         explicitly reload it before starting the next session. */
+      if (a.ended) {
+        try { a.load(); } catch (e) { }
+        try { a.currentTime = 0; } catch (e) { }
+      }
+
+      await a.play();
+    } catch (e) {
+      console.error("Lumora custom audio playback failed:", e);
+      toast("Tap Test again to allow audio playback.");
+    }
+  }
+
+  function stop() {
+    if (!audio) return;
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (e) { }
+  }
+
+  /* Mute only pauses the track. It deliberately does NOT reset currentTime. */
+  function pauseForMute() {
+    if (!audio) return;
+    try { audio.pause(); } catch (e) { }
+  }
+
+  async function remove() {
+    stop();
+    destroyAudio();
+
+    try {
+      await dbDelete();
+      fileName = "";
+      updateStatus();
+      toast("Custom audio removed.");
+    } catch (e) {
+      console.error("Lumora custom audio remove failed:", e);
+      toast("Could not remove the custom audio.");
+    }
+  }
+
+  function hasSound() {
+    return !!fileName;
+  }
+
+  function setVolume(v) {
+    if (audio) audio.volume = clamp(v, 0, 1);
+  }
+
+  async function syncVolume() {
+    setVolume(S.settings.ambientVol);
+  }
+
+  async function init() {
+    try {
+      const record = await dbGet();
+      fileName = record && record.name ? record.name : "";
+      updateStatus();
+    } catch (e) {
+      console.error("Lumora custom audio initialization failed:", e);
+      updateStatus();
+    }
+  }
+
+  return {
+    play,
+    stop,
+    pauseForMute,
+    save,
+    remove,
+    hasSound,
+    setVolume,
+    syncVolume,
+    updateStatus,
+    init
+  };
+})();
+ 
+/* ============================================================
+   5. NOTIFICATIONS + WAKE LOCK
+   ============================================================ */
+const Notify = {
+  supported: typeof Notification !== "undefined",
+  async ask() {
+    if (!Notify.supported) return "unsupported";
+    try {
+      if (Notification.permission === "default") return await Notification.requestPermission();
+      return Notification.permission;
+    } catch (e) { return "denied"; }
+  },
+  send(body, kind) {
+    if (kind === "focus" && !S.settings.notifyFocus) return;
+    if (kind === "break" && !S.settings.notifyBreak) return;
+    if (!Notify.supported || Notification.permission !== "granted") return;
+    try { new Notification("Lumora", { body, tag: "lumora", silent: true }); } catch (e) { }
+  }
+};
+const Wake = {
+  lock: null,
+  async on() {
+    if (!S.settings.keepAwake || !("wakeLock" in navigator)) return;
+    try { Wake.lock = await navigator.wakeLock.request("screen"); Wake.lock.addEventListener("release", () => { Wake.lock = null; }); } catch (e) { }
+  },
+  off() { try { Wake.lock && Wake.lock.release(); } catch (e) { } Wake.lock = null; }
+};
+ 
+/* ============================================================
+   6. TIMER ENGINE — pure, timestamp-driven, UI-independent
+   ============================================================ */
+const Engine = (function () {
+  const KEY = "lumora.run";
+  let st = null;              // run state, or null when idle
+  let listeners = [];
+  const emit = (ev) => listeners.forEach(f => f(ev, st));
+ 
+  function save() { if (st) Store.set(KEY, st); else Store.del(KEY); }
+ 
+  function buildPlan(cfg) {
+    const plan = [];
+    const M = 60000;
+    if (cfg.mode === "pomodoro") {
+      const n = clamp(cfg.sessions || 4, 1, 8);
+      for (let i = 0; i < n; i++) {
+        plan.push({ type: "focus", ms: cfg.minutes * M });
+        if (i < n - 1) plan.push({ type: "short", ms: S.settings.shortMin * M });
+        else plan.push({ type: "long", ms: S.settings.longMin * M });
+      }
+    } else if (cfg.mode === "deep") {
+      plan.push({ type: "focus", ms: cfg.minutes * M });
+      plan.push({ type: "long", ms: S.settings.longMin * M });
+    } else {
+      plan.push({ type: "focus", ms: cfg.minutes * M });
+    }
+    return plan;
+  }
+ 
+  const api = {
+    onChange(fn) { listeners.push(fn); },
+    get state() { return st; },
+    get active() { return !!st; },
+ 
+    step() { return st ? st.plan[st.idx] : null; },
+    focusStepCount() { return st ? st.plan.filter(p => p.type === "focus").length : 0; },
+    focusStepNumber() { return st ? st.plan.slice(0, st.idx + 1).filter(p => p.type === "focus").length : 0; },
+    nextStep() { return st && st.plan[st.idx + 1] ? st.plan[st.idx + 1] : null; },
+ 
+    elapsed() {
+      if (!st) return 0;
+      const end = st.pausedAt || now();
+      return Math.max(0, end - st.startedAt - st.pausedMs);
+    },
+    remaining() {
+      const s = api.step();
+      return s ? Math.max(0, s.ms - api.elapsed()) : 0;
+    },
+    progress() {
+      const s = api.step();
+      return s ? clamp(api.elapsed() / s.ms, 0, 1) : 0;
+    },
+ 
+    start(cfg) {
+      const plan = buildPlan(cfg);
+      if (!plan.length || !plan[0].ms || plan[0].ms < 1000) { toast("Choose a duration of at least 1 minute."); return false; }
+      st = {
+        plan, idx: 0, mode: cfg.mode,
+        subjectId: cfg.subjectId, taskId: cfg.taskId || null,
+        startedAt: now(), pausedAt: null, pausedMs: 0,
+        stage: "running", startedIso: new Date().toISOString()
+      };
+      save(); emit("start"); return true;
+    },
+ 
+    pause() {
+      if (!st || st.stage !== "running" || st.pausedAt) return;
+      st.pausedAt = now(); save(); emit("pause");
+    },
+    resume() {
+      if (!st || !st.pausedAt) return;
+      st.pausedMs += now() - st.pausedAt;
+      st.pausedAt = null; save(); emit("resume");
+    },
+    get paused() { return !!(st && st.pausedAt); },
+ 
+    /* move to the next step and start it */
+    advance(atTs) {
+      if (!st) return;
+      if (st.idx + 1 >= st.plan.length) { st.stage = "routineDone"; save(); emit("routineDone"); return; }
+      st.idx++;
+      st.startedAt = atTs || now();
+      st.pausedAt = null; st.pausedMs = 0;
+      st.stage = "running";
+      save(); emit("advance");
+    },
+ 
+    /* skip the break we're on (or the one coming up) and go to the next focus */
+    skipBreak() {
+      if (!st) return;
+      let i = st.idx;
+      if (st.plan[i].type === "focus") i++;             // from the "session complete" screen
+      while (st.plan[i] && st.plan[i].type !== "focus") i++;
+      if (!st.plan[i]) { st.stage = "routineDone"; save(); emit("routineDone"); return; }
+      st.idx = i; st.startedAt = now(); st.pausedAt = null; st.pausedMs = 0; st.stage = "running";
+      save(); emit("advance");
+    },
+ 
+    /* end early. Records partial focus time so nothing is lost. */
+    end() {
+      if (!st) return;
+      const s = api.step();
+      if (s && s.type === "focus" && st.stage === "running") {
+        const done = api.elapsed();
+        if (done >= 60000) recordSession(st, done, now(), true);
+      }
+      const summary = st;
+      st = null; save(); emit("end", summary);
+    },
+ 
+    finish() { const s = st; st = null; save(); emit("end", s); },
+ 
+    /* The heartbeat. Recomputes purely from timestamps, so it is correct whether
+       it last ran 250ms ago or the laptop was asleep for an hour.
+ 
+       Catch-up rule: a break that elapsed while the student was away is fine to
+       roll through — that is what breaks are. A *focus* session is only ever
+       credited if it was the one actually running when they left. We never
+       auto-start a focus session nobody was present for, so the app can't
+       invent study time. */
+    tick() {
+      if (!st || st.stage !== "running" || st.pausedAt) return;
+      let guard = 0;
+      while (st && st.stage === "running" && !st.pausedAt && api.remaining() <= 0 && guard++ < 20) {
+        const s = api.step();
+        const endedAt = st.startedAt + st.pausedMs + s.ms;
+        const away = now() - endedAt > 2000;
+        const hasNext = !!st.plan[st.idx + 1];
+ 
+        if (s.type === "focus") {
+          recordSession(st, s.ms, endedAt, false);
+          st.stage = hasNext ? "sessionDone" : "routineDone";
+          save(); emit(hasNext ? "sessionDone" : "routineDone");
+          // roll into the break only when catching up; when live, the UI shows
+          // the completion panel first and advances on its own timer.
+          if (away && hasNext && S.settings.autoBreak) api.advance(endedAt); else break;
+        } else {
+          st.stage = hasNext ? "breakDone" : "routineDone";
+          save(); emit(hasNext ? "breakDone" : "routineDone");
+          // never auto-start a focus session during catch-up — wait for them.
+          if (!away && hasNext && S.settings.autoFocus) break;
+          break;
+        }
+      }
+    },
+ 
+    restore() {
+      const saved = Store.get(KEY, null);
+      if (!saved || !saved.plan || !saved.plan.length) return false;
+      // a run older than 12h is stale; drop it rather than showing nonsense
+      if (now() - saved.startedAt > 12 * 3600000 && saved.stage === "running") { Store.del(KEY); return false; }
+      st = saved;
+      return true;
+    },
+    setStage(v) { if (st) { st.stage = v; save(); } },
+    /* test hook: shift the run backwards in time, exactly as a real clock would */
+    __jump(ms) { if (st) { st.startedAt -= ms; save(); } }
+  };
+ 
+  function recordSession(run, actualMs, completedAt, partial) {
+    const rec = {
+      id: uid(), subjectId: run.subjectId, taskId: run.taskId,
+      mode: run.mode, plannedMs: run.plan[run.idx].ms,
+      actualMs: Math.round(actualMs), completedAt, partial: !!partial
+    };
+    S.sessions.push(rec);
+    if (S.sessions.length > 2000) S.sessions = S.sessions.slice(-2000);
+    persist("sessions");
+    if (run.taskId) {
+      const t = taskById(run.taskId);
+      if (t && !partial) { t.doneSessions = (t.doneSessions || 0) + 1; persist("tasks"); }
+    }
+  }
+ 
+  return api;
+})();
+ 
+/* ============================================================
+   7. UI
+   ============================================================ */
+let tab = "home";
+let obStep = 0;
+const CHOICES = { focus: [15, 20, 25, 30, 45, 50, 60], short: [3, 5, 10], long: [15, 20, 30], deep: [45, 60, 90], count: [30, 60, 90, 120] };
+const QUICK = [
+  { icon: "⚡", name: "Quick focus", mode: "pomodoro", minutes: 25, sessions: 4 },
+  { icon: "🧠", name: "Deep study", mode: "deep", minutes: 50 },
+  { icon: "📚", name: "Revision", mode: "deep", minutes: 45 },
+  { icon: "💻", name: "Coding", mode: "deep", minutes: 60 },
+];
+ 
+/* ---------- toast ---------- */
+let toastT = null;
+function toast(msg) {
+  const n = el("toast"); if (!n) return;
+  n.textContent = msg; n.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove("on"), 2600);
+}
+window.toast = toast;
+ 
+/* ---------- theme ---------- */
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+function applyTheme() {
+  const t = S.settings.theme;
+  const resolved = t === "system" ? (mq.matches ? "dark" : "light") : t;
+  document.documentElement.setAttribute("data-theme", resolved);
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.documentElement.setAttribute("data-anim", (S.settings.animations && !reduced) ? "on" : "off");
+}
+mq.addEventListener("change", () => { if (S.settings.theme === "system") applyTheme(); });
+ 
+/* ---------- progress ring ---------- */
+const R = 46, CIRC = 2 * Math.PI * R;
+function ringSVG() {
+  return '<svg viewBox="0 0 100 100" aria-hidden="true">' +
+    '<circle class="ring-track" cx="50" cy="50" r="' + R + '"/>' +
+    '<circle class="ring-prog" id="ringProg" cx="50" cy="50" r="' + R + '" stroke-dasharray="' + CIRC.toFixed(2) + '" stroke-dashoffset="0"/></svg>';
+}
+ 
+/* ---------- nav ---------- */
+function renderNav() {
+  el("nav").innerHTML = [["home", "Home", I.home], ["tasks", "Tasks", I.task], ["history", "History", I.hist], ["settings", "Settings", I.set]]
+    .map(([k, label, icon]) => '<button data-a="tab" data-v="' + k + '"' + (tab === k ? ' aria-current="page"' : "") + '>' + icon + '<span>' + label + '</span></button>').join("");
+}
+function go(k) {
+  tab = k;
+  ["home", "tasks", "history", "settings"].forEach(n => el("s-" + n).classList.toggle("on", n === k));
+  renderNav(); render();
+  window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+}
+ 
+/* ---------- HOME ---------- */
+function renderHome() {
+  const d = S.draft, st = S.settings;
+  const subj = subjectById(d.subjectId);
+  const streak = Stats.streak();
+  const today = Stats.onDay(now());
+  const todayMs = Stats.totalMs(today);
+  const goalMs = st.dailyGoalMin * 60000;
+  const pct = clamp(todayMs / goalMs, 0, 1);
+  const byS = Stats.bySubject(today);
+  const tasksFor = S.tasks.filter(t => t.subjectId === d.subjectId && !t.done);
+ 
+  const durs = d.mode === "pomodoro" ? CHOICES.focus : d.mode === "deep" ? CHOICES.deep : CHOICES.count;
+  const mins = d.minutes;
+  const plannedMs = d.mode === "pomodoro"
+    ? (mins * d.sessions + st.shortMin * (d.sessions - 1) + st.longMin) * 60000
+    : (d.mode === "deep" ? mins * 60000 + st.longMin * 60000 : mins * 60000);
+  const endsAt = new Date(now() + plannedMs);
+ 
+  const hour = new Date().getHours();
+  const greet = hour < 5 ? "Late night session" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+ 
+  el("s-home").innerHTML =
+    '<div class="top"><div class="brand">' + I.logo + 'Lumora</div>' +
+    (streak.current > 0 ? '<div class="chip" style="--sc:#F59E0B;pointer-events:none"><span class="dot"></span>' + streak.current + ' day streak</div>' : "") +
+    '</div>' +
+ 
+    '<h1>Ready to study?</h1><p class="sub">' + greet + '. ' + (todayMs > 0 ? fmtDurLong(todayMs) + ' focused today.' : 'Nothing logged yet today.') + '</p>' +
+ 
+    '<div class="section"><div class="label">Quick start</div><div class="chips grid2">' +
+    QUICK.map((q, i) => '<button class="chip" data-a="quick" data-v="' + i + '"><span aria-hidden="true">' + q.icon + '</span><span>' + q.name + ' · ' + q.minutes + 'm</span></button>').join("") +
+    '</div></div>' +
+ 
+    '<div class="section"><div class="label">What are you studying?</div><div class="chips">' +
+    S.subjects.map(s => '<button class="chip" style="--sc:' + s.color + '" data-a="subject" data-v="' + s.id + '" aria-pressed="' + (s.id === d.subjectId) + '"><span class="dot"></span>' + esc(s.name) + '</button>').join("") +
+    '<button class="chip ghost" data-a="newSubject">+ Add subject</button></div></div>' +
+ 
+    '<div class="section"><div class="label">Focus style</div>' +
+    '<div class="seg" role="group">' +
+    [["pomodoro", "Pomodoro"], ["deep", "Deep focus"], ["count", "Countdown"]]
+      .map(([k, l]) => '<button data-a="mode" data-v="' + k + '" aria-pressed="' + (d.mode === k) + '">' + l + '</button>').join("") +
+    '</div></div>' +
+ 
+    '<div class="section"><div class="label">Duration</div><div class="chips">' +
+    durs.map(m => '<button class="chip" data-a="dur" data-v="' + m + '" aria-pressed="' + (mins === m) + '">' + m + ' min</button>').join("") +
+    '<button class="chip ghost" data-a="customDur"' + (durs.indexOf(mins) === -1 ? ' aria-pressed="true"' : '') + '>' + (durs.indexOf(mins) === -1 ? 'Custom · ' + mins + ' min' : 'Custom') + '</button></div></div>' +
+ 
+    (d.mode === "pomodoro" ? '<div class="section"><div class="label">Sessions</div><div class="chips">' +
+      [2, 3, 4, 5, 6, 8].map(n => '<button class="chip" data-a="sessions" data-v="' + n + '" aria-pressed="' + (d.sessions === n) + '">' + n + '</button>').join("") +
+      '</div></div>' : "") +
+ 
+    (tasksFor.length ? '<div class="section"><div class="label">Working on (optional)</div><div class="chips">' +
+      tasksFor.slice(0, 6).map(t => '<button class="chip" data-a="task" data-v="' + t.id + '" aria-pressed="' + (d.taskId === t.id) + '">' + esc(t.title) + (t.estSessions ? ' · ' + (t.doneSessions || 0) + '/' + t.estSessions : "") + '</button>').join("") +
+      (d.taskId ? '<button class="chip ghost" data-a="task" data-v="">Clear</button>' : "") +
+      '</div></div>' : "") +
+ 
+    '<button class="start" data-a="start">Start focus · ' + esc(subj.name) + '</button>' +
+    '<p class="sub" style="text-align:center;margin:12px 0 30px;font-size:13px">' +
+    (d.mode === "pomodoro" ? d.sessions + ' session' + (d.sessions > 1 ? 's' : '') + ' · ' + st.shortMin + ' min breaks · ' : d.mode === "deep" ? 'One long session · ' : 'Single countdown · ') +
+    'ends around ' + endsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + '</p>' +
+ 
+    '<h2>Today</h2>' +
+    '<div class="card" style="margin-bottom:14px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">' +
+    '<div><div class="label" style="margin:0 0 2px">Daily goal</div><b style="font-family:var(--ff-head);font-size:21px;letter-spacing:-.02em">' + fmtDurLong(todayMs) + ' <span style="color:var(--text-3);font-weight:500">/ ' + fmtDur(goalMs) + '</span></b></div>' +
+    '<button class="btn" data-a="editGoal" style="min-height:38px;padding:8px 14px;font-size:13px">Change</button></div>' +
+    '<div class="meter' + (pct >= 1 ? ' done' : '') + '"><i style="width:' + (pct * 100).toFixed(1) + '%"></i></div>' +
+    '<p style="margin:10px 0 0;font-size:13px;color:var(--text-3)">' + (pct >= 1 ? "Goal reached. Keep going if you like." : todayMs > 0 ? "Keep going." : "Your first session starts the day.") + '</p>' +
+    '</div>' +
+ 
+    '<div class="stats" style="margin-bottom:14px">' +
+    stat(fmtDurLong(todayMs), "Focus time") +
+    stat(String(today.length), "Sessions") +
+    stat(String(today.filter(s => !s.partial).length), "Completed") +
+    stat(streak.current + (streak.current === 1 ? " day" : " days"), "Streak") +
+    '</div>' +
+ 
+    (byS.length ? '<div class="card"><h2>Today\'s subjects</h2><div class="list">' +
+      byS.map(r => '<div class="line"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:' + r.subject.color + ';flex:none"></span>' +
+        '<span class="nm">' + esc(r.subject.name) + '</span><span class="vl">' + fmtDurLong(r.ms) + '</span></div>').join("") +
+      '</div></div>'
+      : '<div class="card"><div class="empty"><b>No sessions yet today</b>Start your first focus session above.</div></div>');
+}
+function stat(big, small) { return '<div class="stat"><b>' + esc(big) + '</b><span>' + esc(small) + '</span></div>'; }
+ 
+/* ---------- TASKS ---------- */
+function renderTasks() {
+  const groups = S.subjects.map(s => ({ s, items: S.tasks.filter(t => t.subjectId === s.id) })).filter(g => g.items.length);
+  el("s-tasks").innerHTML =
+    '<div class="top"><div class="brand">' + I.logo + 'Tasks</div></div>' +
+    '<h1>What needs doing?</h1><p class="sub">Attach a task to a session to track how many it takes.</p>' +
+    '<div class="card" style="margin-bottom:20px">' +
+    '<div class="label">New task</div>' +
+    '<div class="field" style="margin-bottom:10px"><input class="input" id="tTitle" placeholder="e.g. Finish integration problems" maxlength="90"></div>' +
+    '<div class="field"><select class="input" id="tSubj">' + S.subjects.map(s => '<option value="' + s.id + '"' + (s.id === S.draft.subjectId ? " selected" : "") + '>' + esc(s.name) + '</option>').join("") + '</select>' +
+    '<input class="num" id="tEst" type="number" min="1" max="12" value="2" aria-label="Estimated sessions">' +
+    '<button class="btn solid" data-a="addTask" style="flex:none">Add</button></div>' +
+    '<p style="margin:9px 0 0;font-size:12.5px;color:var(--text-3)">Number is how many focus sessions you think it will take.</p>' +
+    '</div>' +
+    (groups.length ? groups.map(g =>
+      '<div class="card" style="margin-bottom:14px"><h2><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + g.s.color + ';margin-right:8px"></span>' + esc(g.s.name) + '</h2>' +
+      g.items.map(t => {
+        const pct = t.estSessions ? clamp((t.doneSessions || 0) / t.estSessions, 0, 1) : 0;
+        return '<div class="task' + (t.done ? " done" : "") + '">' +
+          '<button class="check" data-a="toggleTask" data-v="' + t.id + '" role="checkbox" aria-checked="' + !!t.done + '" aria-label="Mark ' + esc(t.title) + ' complete">' + I.check + '</button>' +
+          '<div class="tbody"><div class="tt">' + esc(t.title) + '</div>' +
+          (t.estSessions ? '<div class="tmeta">' + (t.doneSessions || 0) + ' of ' + t.estSessions + ' sessions</div><div class="bar"><i style="width:' + (pct * 100) + '%;background:' + g.s.color + '"></i></div>' : "") +
+          '</div>' +
+          '<button class="btn danger" data-a="delTask" data-v="' + t.id + '" style="flex:none;min-height:38px;padding:7px 12px;font-size:13px">Delete</button></div>';
+      }).join("") + '</div>').join("")
+      : '<div class="card"><div class="empty"><b>Nothing planned</b>Add something you want to study.</div></div>');
+}
+ 
+/* ---------- HISTORY ---------- */
+let histRange = "today";
+function renderHistory() {
+  const t0 = startOfDay(now());
+  const ranges = {
+    today: [t0, t0 + 86400000],
+    yesterday: [t0 - 86400000, t0],
+    week: [t0 - ((new Date(t0).getDay() + 6) % 7) * 86400000, t0 + 86400000],
+    month: [new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime(), t0 + 86400000],
+  };
+  const [from, to] = ranges[histRange];
+  const list = Stats.between(from, to);
+  const total = Stats.totalMs(list);
+  const avg = list.length ? total / list.length : 0;
+  const byS = Stats.bySubject(list);
+  const week = Stats.week();
+  const peak = Math.max(1, ...week.map(w => w.ms));
+  const streak = Stats.streak();
+  const allMs = Stats.totalMs(S.sessions);
+ 
+  el("s-history").innerHTML =
+    '<div class="top"><div class="brand">' + I.logo + 'History</div></div>' +
+    '<h1>Your focus</h1><p class="sub">' + fmtDurLong(allMs) + ' across ' + S.sessions.length + ' session' + (S.sessions.length === 1 ? "" : "s") + ' all time.</p>' +
+ 
+    '<div class="seg" style="margin-bottom:18px">' +
+    [["today", "Today"], ["yesterday", "Yesterday"], ["week", "Week"], ["month", "Month"]]
+      .map(([k, l]) => '<button data-a="range" data-v="' + k + '" aria-pressed="' + (histRange === k) + '">' + l + '</button>').join("") +
+    '</div>' +
+ 
+    '<div class="stats" style="margin-bottom:18px">' +
+    stat(fmtDurLong(total), "Focus time") +
+    stat(String(list.length), "Sessions") +
+    stat(list.length ? fmtDur(avg) : "—", "Average") +
+    stat(String(byS.length), "Subjects") +
+    '</div>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>This week</h2>' +
+    '<div class="week">' + week.map(w =>
+      '<div class="col' + (w.today ? " today" : "") + (w.ms === 0 ? " zero" : "") + '">' +
+      '<div class="stack"><div class="fill" style="height:' + (w.ms === 0 ? 3 : Math.max(6, (w.ms / peak) * 100)) + '%" title="' + fmtDurLong(w.ms) + '"></div></div>' +
+      '<div class="d">' + w.label + '</div></div>').join("") + '</div>' +
+    '<p style="margin:12px 0 0;font-size:13px;color:var(--text-3)">Tallest bar: ' + fmtDurLong(peak) + '</p></div>' +
+ 
+    '<div class="stats" style="margin-bottom:14px">' +
+    stat(String(streak.current), "Current streak") +
+    stat(String(streak.longest), "Longest streak") +
+    '</div>' +
+ 
+    (byS.length ? '<div class="card"><h2>By subject</h2><div class="list">' +
+      byS.map(r => '<div class="line"><span style="width:9px;height:9px;border-radius:50%;background:' + r.subject.color + ';flex:none"></span>' +
+        '<span class="nm">' + esc(r.subject.name) + '</span><span class="vl">' + fmtDurLong(r.ms) + '</span></div>').join("") + '</div></div>'
+      : '<div class="card"><div class="empty"><b>No study sessions yet</b>Start your first focus session.</div></div>');
+}
+ 
+/* ---------- SETTINGS ---------- */
+function renderSettings() {
+  const st = S.settings;
+  const sw = (key, title, desc) => '<div class="set"><div class="sl"><b>' + title + '</b><span>' + desc + '</span></div>' +
+    '<button class="sw" role="switch" aria-checked="' + !!st[key] + '" aria-label="' + title + '" data-a="toggle" data-v="' + key + '"></button></div>';
+  const pick = (key, title, values, unit) => '<div class="set"><div class="sl"><b>' + title + '</b><span>' + st[key] + ' ' + unit + '</span></div>' +
+    '<div class="seg">' + values.map(v => '<button data-a="setnum" data-v="' + key + ':' + v + '" aria-pressed="' + (st[key] === v) + '">' + v + '</button>').join("") + '</div></div>';
+ 
+  el("s-settings").innerHTML =
+    '<div class="top"><div class="brand">' + I.logo + 'Settings</div></div>' +
+    '<h1>Settings</h1><p class="sub">Everything here changes how the timer behaves.</p>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>Timer</h2>' +
+    pick("focusMin", "Focus length", CHOICES.focus, "minutes") +
+    pick("shortMin", "Short break", CHOICES.short, "minutes") +
+    pick("longMin", "Long break", CHOICES.long, "minutes") +
+    pick("sessions", "Sessions per routine", [2, 3, 4, 5, 6, 8], "sessions") +
+    '<div class="set"><div class="sl"><b>Daily goal</b><span>' + fmtDur(st.dailyGoalMin * 60000) + ' of focus</span></div>' +
+    '<div class="seg">' + [60, 120, 180, 240].map(v => '<button data-a="setnum" data-v="dailyGoalMin:' + v + '" aria-pressed="' + (st.dailyGoalMin === v) + '">' + (v / 60) + 'h</button>').join("") +
+    '<button data-a="editGoal">Custom</button></div></div>' +
+    '</div>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>Appearance</h2>' +
+    '<div class="set"><div class="sl"><b>Theme</b><span>Dark is built for late study</span></div><div class="seg">' +
+    [["light", "Light"], ["dark", "Dark"], ["system", "System"]].map(([k, l]) => '<button data-a="theme" data-v="' + k + '" aria-pressed="' + (st.theme === k) + '">' + l + '</button>').join("") +
+    '</div></div>' +
+    sw("animations", "Animations", "Turn off for a still background") +
+    '</div>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>Sound</h2>' +
+    '<div class="set" style="flex-wrap:wrap"><div class="sl" style="flex-basis:100%"><b>Ambient sound</b><span>Plays only while you are focusing</span></div>' +
+    '<div class="chips" style="margin-top:10px">' + Object.keys(Sound.LABELS).map(k =>
+      '<button class="chip" data-a="ambient" data-v="' + k + '" aria-pressed="' + (st.ambient === k) + '">' + Sound.LABELS[k] + '</button>').join("") + '</div></div>' +
+    '<div class="set"><div class="sl"><b>Volume</b><span>' + Math.round(st.ambientVol * 100) + '%</span></div>' +
+    '<input type="range" min="0" max="100" value="' + Math.round(st.ambientVol * 100) + '" data-a="vol" aria-label="Ambient volume" style="width:140px"></div>' +
+    sw("completionSound", "Completion chime", "A short tone when a session ends") +
+    sw("haptics", "Vibration", "Where the device supports it") +
+    /* Custom audio controls */
+'<div class="set" style="flex-wrap:wrap">' +
+  '<div class="sl" style="flex-basis:100%">' +
+    '<b>Custom audio</b>' +
+    '<span id="customSoundStatus">No custom audio selected</span>' +
+  '</div>' +
+  '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+    '<label class="btn" for="customSoundFile" style="cursor:pointer">Choose audio</label>' +
+    '<input id="customSoundFile" type="file" accept="audio/*" style="display:none">' +
+    '<button class="btn" type="button" data-custom-action="play">▶ Test</button>' +
+    '<button class="btn" type="button" data-custom-action="stop">■ Stop</button>' +
+    '<button class="btn danger" type="button" data-custom-action="remove">Remove</button>' +
+  '</div>' +
+'</div>' +
+    '</div>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>Behaviour</h2>' +
+    sw("autoBreak", "Start breaks automatically", "Move straight into the break") +
+    sw("autoFocus", "Start next session automatically", "Skip the ready screen") +
+    sw("keepAwake", "Keep the screen awake", "During a focus session") +
+    '</div>' +
+ 
+    '<div class="card" style="margin-bottom:14px"><h2>Notifications</h2>' +
+    sw("notifyFocus", "Focus complete", "Tell me when a session ends") +
+    sw("notifyBreak", "Break complete", "Tell me when a break ends") +
+    '<div class="set"><div class="sl"><b>Permission</b><span>' + (Notify.supported ? (Notification.permission === "granted" ? "Allowed" : Notification.permission === "denied" ? "Blocked in your browser settings" : "Not asked yet") : "Not supported here") + '</span></div>' +
+    (Notify.supported && Notification.permission === "default" ? '<button class="btn" data-a="askNotify">Allow</button>' : "") + '</div>' +
+    '</div>' +
+ 
+    '<div class="card"><h2>Data</h2>' +
+    '<div class="set"><div class="sl"><b>Stored on this device</b><span>' + S.sessions.length + ' sessions · ' + S.tasks.length + ' tasks · ' + S.subjects.length + ' subjects</span></div></div>' +
+    '<div class="row" style="margin-top:12px"><button class="btn" data-a="replayIntro">Replay intro</button>' +
+    '<button class="btn danger" data-a="resetAll">Erase all data</button></div></div>' +
+    '<p class="sub" style="text-align:center;margin:22px 0 0;font-size:12.5px">Lumora · a quiet room for focused minds</p>';
+  CustomAudio.updateStatus();
+}
+ 
+/* ---------- render router ---------- */
+function render() {
+  if (tab === "home") renderHome();
+  else if (tab === "tasks") renderTasks();
+  else if (tab === "history") renderHistory();
+  else renderSettings();
+}
+ 
+/* ============================================================
+   8. FOCUS MODE
+   ============================================================ */
+let lastPaint = "";
+function renderFocus() {
+  const f = el("focus");
+  const st = Engine.state;
+  if (!st) { f.classList.remove("on"); f.innerHTML = ""; lastPaint = ""; Wake.off(); Sound.stop(); return; }
+ 
+  const subj = subjectById(st.subjectId);
+  const task = taskById(st.taskId);
+  const step = Engine.step();
+  const isBreak = step.type !== "focus";
+  const n = Engine.focusStepNumber(), total = Engine.focusStepCount();
+  const nextStep = Engine.nextStep();
+ 
+  f.classList.add("on");
+  f.setAttribute("data-phase", (st.stage === "running" && isBreak) || st.stage === "sessionDone" ? "break" : "focus");
+  f.classList.toggle("paused", Engine.paused);
+ 
+  const key = [st.stage, st.idx, Engine.paused, st.subjectId].join("|");
+  if (key === lastPaint) { paintTime(); return; }
+  lastPaint = key;
+ 
+  const top = '<div class="fxtop">' +
+    '<button class="icobtn" data-a="fxExit" aria-label="Leave focus mode">' + I.close + '</button>' +
+    '<button class="icobtn" data-a="fxSound" aria-pressed="' + (!S.settings.audioMuted) + '" aria-label="' + (S.settings.audioMuted ? 'Unmute audio' : 'Mute audio') + '">' + (S.settings.audioMuted ? I.mute : I.sound) + '</button></div>';
+  const bg = '<div class="fxbg" aria-hidden="true"><span></span><span></span><span></span></div><canvas id="fxCanvas" aria-hidden="true"></canvas>';
+ 
+  let body = "";
+ 
+  if (st.stage === "running") {
+    const dots = total > 1 ? '<div class="dots" aria-hidden="true">' + Array.from({ length: total }, (_, i) =>
+      '<i class="' + (i + 1 < n ? "done" : i + 1 === n ? "now" : "") + '"></i>').join("") + '</div>' : "";
+    body = '<div class="fxwrap">' +
+      '<div><div class="fxsubject">' + esc(isBreak ? (step.type === "long" ? "Long break" : "Break") : subj.name) + '</div>' +
+      (!isBreak && task ? '<div class="fxtask">' + esc(task.title) + '</div>' : "") + '</div>' +
+      '<div class="ringbox">' + ringSVG() +
+      '<div class="ringcore"><div class="fxtime' + (Engine.paused ? "" : " breathe") + '" id="fxTime" role="timer" aria-live="off">' + fmtClock(Engine.remaining()) + '</div>' +
+      '<div class="fxphase">' + (Engine.paused ? "Paused" : isBreak ? "Rest" : "Deep focus") + '</div></div></div>' +
+      dots +
+      (total > 1 ? '<div class="fxmeta">' + (isBreak ? "After this: session " + Math.min(n + 1, total) + " of " + total : "Session " + n + " of " + total) + '</div>' : '<div class="fxmeta">' + Math.round(step.ms / 60000) + ' minute ' + (isBreak ? 'break' : 'session') + '</div>') +
+      (Engine.paused
+        ? '<div class="fxctl"><button class="fbtn primary" data-a="fxResume">Resume</button><button class="fbtn" data-a="fxAskEnd">End session</button></div>'
+        : '<div class="fxctl"><button class="fbtn" data-a="fxPause">Pause</button>' +
+        (isBreak ? '<button class="fbtn quiet" data-a="fxSkipBreak">Skip break</button>' : '<button class="fbtn quiet" data-a="fxAskEnd">Finish early</button>') + '</div>') +
+      '<div class="fxnext">' + (nextStep ? (nextStep.type === "focus" ? "Next: " + Math.round(nextStep.ms / 60000) + " min focus" : "Next break: " + Math.round(nextStep.ms / 60000) + " minutes") : "Last one — then you're done") + '</div>' +
+      '</div>';
+  }
+ 
+  else if (st.stage === "sessionDone") {
+    const breakNext = nextStep && nextStep.type !== "focus";
+    body = '<div class="fxwrap"><div class="panel">' +
+      '<div class="seal">' + I.check + '</div>' +
+      '<div><div class="ptitle">Session complete</div><div class="psub">' + esc(subj.name) + (total > 1 ? ' · focus session ' + n + ' of ' + total : '') + '</div></div>' +
+      '<div class="pbig">' + fmtClock(step.ms) + '</div>' +
+      (breakNext
+        ? '<div class="tips"><div><i></i>Stand up</div><div><i></i>Drink water</div><div><i></i>Stretch</div><div><i></i>Rest your eyes</div></div>' +
+        '<div class="fxctl"><button class="fbtn primary" data-a="fxAdvance">Take a ' + Math.round(nextStep.ms / 60000) + ' min break</button></div>' +
+        '<button class="fbtn quiet" data-a="fxSkipBreak">Skip the break, keep going</button>'
+        : '<div class="fxctl"><button class="fbtn primary" data-a="fxFinish">See summary</button></div>') +
+      '</div></div>';
+  }
+ 
+  else if (st.stage === "breakDone") {
+    const nxt = nextStep;
+    body = '<div class="fxwrap"><div class="panel">' +
+      '<div class="seal mint">' + I.check + '</div>' +
+      '<div><div class="ptitle">Break complete</div><div class="psub">Ready when you are</div></div>' +
+      (nxt ? '<div><div class="fxphase" style="margin-bottom:8px">Next session</div><div class="ptitle">' + esc(subj.name) + '</div>' +
+        '<div class="psub" style="margin-top:6px">' + Math.round(nxt.ms / 60000) + ' minutes · session ' + Math.min(n + 1, total) + ' of ' + total + '</div></div>' +
+        '<div class="fxctl"><button class="fbtn primary" data-a="fxAdvance">Start</button><button class="fbtn" data-a="fxFinish">I\'m done</button></div>'
+        : '<div class="fxctl"><button class="fbtn primary" data-a="fxFinish">See summary</button></div>') +
+      '</div></div>';
+  }
+ 
+  else { /* routineDone */
+    const todayList = Stats.onDay(now());
+    const runMs = Stats.totalMs(todayList);
+    body = '<div class="fxwrap"><div class="panel">' +
+      '<div class="seal mint">' + I.check + '</div>' +
+      '<div><div class="ptitle">' + (total > 1 ? "Routine complete" : "Session complete") + '</div>' +
+      '<div class="psub">' + esc(subj.name) + ' · ' + total + ' session' + (total > 1 ? "s" : "") + '</div></div>' +
+      '<div class="pbig">' + fmtDurLong(runMs) + '</div>' +
+      '<div class="psub">focused today across ' + todayList.length + ' session' + (todayList.length === 1 ? "" : "s") + '</div>' +
+      '<div class="fxctl"><button class="fbtn primary" data-a="fxFinish">Done</button></div>' +
+      '</div></div>';
+  }
+ 
+  f.innerHTML = bg + top + body;
+  startParticles();
+  paintTime();
+}
+ 
+function paintTime() {
+  const st = Engine.state; if (!st || st.stage !== "running") return;
+  const t = el("fxTime"); if (!t) return;
+  const txt = fmtClock(Engine.remaining());
+  if (t.textContent !== txt) {
+    t.textContent = txt;
+    t.setAttribute("aria-label", txt.split(":").length === 3 ? txt : txt.split(":")[0] + " minutes " + txt.split(":")[1] + " seconds remaining");
+  }
+  const ring = el("ringProg");
+  if (ring) ring.style.strokeDashoffset = (CIRC * Engine.progress()).toFixed(2);
+}
+ 
+/* particles — 26 slow motes, paused when hidden or animations off */
+let pRAF = null;
+function startParticles() {
+  cancelAnimationFrame(pRAF);
+  const c = el("fxCanvas");
+  if (!c || document.documentElement.getAttribute("data-anim") === "off") return;
+  const ctx = c.getContext("2d");
+  let w, h, parts = [];
+  function size() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = c.clientWidth; h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  size();
+  for (let i = 0; i < 26; i++) parts.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.8 + 0.6, vy: -(Math.random() * 0.14 + 0.03), a: Math.random() * 0.32 + 0.06 });
+  let last = 0;
+  function frame(ts) {
+    pRAF = requestAnimationFrame(frame);
+    if (ts - last < 33) return; last = ts;            // ~30fps is plenty, saves battery
+    if (c.clientWidth !== w || c.clientHeight !== h) size();
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#fff";
+    parts.forEach(p => {
+      p.y += p.vy; p.x += Math.sin(p.y / 90) * 0.12;
+      if (p.y < -6) { p.y = h + 6; p.x = Math.random() * w; }
+      ctx.globalAlpha = p.a; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+  pRAF = requestAnimationFrame(frame);
+}
+function stopParticles() { cancelAnimationFrame(pRAF); pRAF = null; }
+ 
+/* ============================================================
+   9. MODAL
+   ============================================================ */
+let modalConfirm = null;
+function ask(title, body, okLabel, onOk, danger) {
+  modalConfirm = onOk;
+  el("modal").innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+    '<h3>' + esc(title) + '</h3><p>' + esc(body) + '</p>' +
+    '<div class="row"><button class="btn" data-a="modalNo">Cancel</button>' +
+    '<button class="btn ' + (danger ? "danger" : "solid") + '" data-a="modalYes">' + esc(okLabel) + '</button></div></div>';
+  el("modal").classList.add("on");
+}
+function prompt2(title, body, initial, onOk, suffix) {
+  modalConfirm = () => {
+    const v = parseInt(el("mInput").value, 10);
+    if (!v || v < 1 || v > 600) { toast("Enter a number between 1 and 600."); return true; }
+    onOk(v);
+  };
+  el("modal").innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+    '<h3>' + esc(title) + '</h3><p>' + esc(body) + '</p>' +
+    '<div class="field" style="margin-bottom:18px"><input class="input" id="mInput" type="number" min="1" max="600" value="' + initial + '" inputmode="numeric">' +
+    '<span style="color:var(--text-3);font-size:14px">' + esc(suffix || "minutes") + '</span></div>' +
+    '<div class="row"><button class="btn" data-a="modalNo">Cancel</button><button class="btn solid" data-a="modalYes">Save</button></div></div>';
+  el("modal").classList.add("on");
+  setTimeout(() => { const i = el("mInput"); i && i.select(); }, 60);
+}
+function prompt3(title, body, onOk, placeholder) {
+  modalConfirm = () => {
+    const v = el("mInput").value.trim();
+    if (!v) { toast("Give it a name first."); return true; }
+    onOk(v);
+  };
+  el("modal").innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+    '<h3>' + esc(title) + '</h3><p>' + esc(body) + '</p>' +
+    '<div class="field" style="margin-bottom:18px"><input class="input" id="mInput" maxlength="28" placeholder="' + esc(placeholder || "") + '"></div>' +
+    '<div class="row"><button class="btn" data-a="modalNo">Cancel</button><button class="btn solid" data-a="modalYes">Add</button></div></div>';
+  el("modal").classList.add("on");
+  setTimeout(() => { const i = el("mInput"); i && i.focus(); }, 60);
+}
+function closeModal() { el("modal").classList.remove("on"); el("modal").innerHTML = ""; modalConfirm = null; }
+ 
+/* ============================================================
+   10. ONBOARDING
+   ============================================================ */
+function renderOb() {
+  const d = S.draft, st = S.settings;
+  const steps = [
+    { h: "Study better.<br>One focused session at a time.", p: "No account. Nothing to set up. Everything stays on this device.", body: "" },
+    {
+      h: "What are you studying?", p: "Pick one to start with — you can add your own later.",
+      body: '<div class="chips">' + S.subjects.map(s => '<button class="chip" data-a="subject" data-v="' + s.id + '" aria-pressed="' + (s.id === d.subjectId) + '"><span class="dot" style="background:' + s.color + '"></span>' + esc(s.name) + '</button>').join("") + '</div>'
+    },
+     
+    {
+      h: "Choose your focus style", p: "You can switch any time.",
+      body: [["pomodoro", "Pomodoro", "Short sessions with breaks between. The classic."], ["deep", "Deep focus", "One long uninterrupted stretch, then a real break."], ["count", "Countdown", "A plain timer for exams and practice."]]
+        .map(([k, t, s]) => '<button class="mode-opt" data-a="mode" data-v="' + k + '" aria-pressed="' + (d.mode === k) + '"><b>' + t + '</b><span>' + s + '</span></button>').join("")
+    },
+    {
+      h: "Set your daily goal", p: "A target, not a rule. Nothing happens if you miss it.",
+      body: '<div class="chips">' + [60, 120, 180, 240].map(v => '<button class="chip" data-a="setnum" data-v="dailyGoalMin:' + v + '" aria-pressed="' + (st.dailyGoalMin === v) + '">' + (v / 60) + ' hour' + (v > 60 ? "s" : "") + '</button>').join("") +
+        '<button class="chip ghost" data-a="editGoal">Custom</button></div>'
+    },
+    { h: "Ready?", p: subjectById(d.subjectId).name + " · " + d.minutes + " minutes · " + (d.mode === "pomodoro" ? d.sessions + " sessions" : "one session"), body: "" },
+  ];
+  const s = steps[obStep];
+  el("ob").innerHTML = '<div class="obwrap">' +
+    '<div class="brand" style="color:#fff">' + I.logo + 'Lumora</div>' +
+    '<div class="obbody"><h2>' + s.h + '</h2><p>' + esc(s.p) + '</p>' + s.body + '</div>' +
+    '<div class="obdots">' + steps.map((_, i) => '<i class="' + (i === obStep ? "on" : "") + '"></i>').join("") + '</div>' +
+    '<div class="row">' + (obStep > 0 ? '<button class="fbtn quiet" data-a="obBack" style="flex:none">Back</button>' : '<button class="fbtn quiet" data-a="obSkip" style="flex:none">Skip</button>') +
+    '<button class="start" data-a="obNext" style="margin:0">' + (obStep === steps.length - 1 ? "Start studying" : "Continue") + '</button></div>' +
+    '</div>';
+}
+ 
+/* ============================================================
+   11. ACTIONS
+   ============================================================ */
+const actions = {
+  tab: (v) => go(v),
+ 
+  /* setup */
+  subject(v) {
+    S.draft.subjectId = v; S.draft.taskId = null; persist("draft");
+    if (el("ob").classList.contains("on")) renderOb(); else render();
+  },
+  newSubject() {
+    prompt3("New subject", "What do you want to call it?", (name) => {
+      const s = { id: uid(), name, color: PALETTE[S.subjects.length % PALETTE.length] };
+      S.subjects.push(s); persist("subjects");
+      S.draft.subjectId = s.id; persist("draft");
+      closeModal(); render(); toast("Added " + name + ".");
+    }, "e.g. Data Structures");
+  },
+  mode(v) {
+    S.draft.mode = v;
+    S.draft.minutes = v === "pomodoro" ? S.settings.focusMin : v === "deep" ? S.settings.deepMin : S.settings.countMin;
+    persist("draft");
+    if (el("ob").classList.contains("on")) renderOb(); else render();
+  },
+  dur(v) {
+    S.draft.minutes = parseInt(v, 10);
+    const k = S.draft.mode === "pomodoro" ? "focusMin" : S.draft.mode === "deep" ? "deepMin" : "countMin";
+    S.settings[k] = S.draft.minutes; persist(); render();
+  },
+  customDur() {
+    prompt2("Custom duration", "How long should each focus session run?", S.draft.minutes, (v) => {
+      S.draft.minutes = v;
+      const k = S.draft.mode === "pomodoro" ? "focusMin" : S.draft.mode === "deep" ? "deepMin" : "countMin";
+      S.settings[k] = v; persist(); closeModal(); render();
+    });
+  },
+  sessions(v) { S.draft.sessions = parseInt(v, 10); S.settings.sessions = S.draft.sessions; persist(); render(); },
+  task(v) { S.draft.taskId = v || null; persist("draft"); render(); },
+  quick(v) {
+    const q = QUICK[parseInt(v, 10)];
+    S.draft.mode = q.mode; S.draft.minutes = q.minutes;
+    if (q.sessions) S.draft.sessions = q.sessions;
+    persist("draft"); actions.start();
+  },
+  editGoal() {
+    prompt2("Daily goal", "How much focus time are you aiming for each day?", S.settings.dailyGoalMin, (v) => {
+      S.settings.dailyGoalMin = v; persist("settings"); closeModal();
+      if (el("ob").classList.contains("on")) renderOb(); else render();
+    });
+  },
+ 
+  /* run */
+  start() {
+    const d = S.draft;
+    if (!Engine.start({ mode: d.mode, minutes: d.minutes, sessions: d.sessions, subjectId: d.subjectId, taskId: d.taskId })) return;
+    Sound.resume();
+    if (!S.settings.audioMuted) {
+      if (CustomAudio.hasSound()) CustomAudio.play();
+      else if (S.settings.ambient !== "none") Sound.start(S.settings.ambient);
+    }
+    if (S.settings.notifyFocus || S.settings.notifyBreak) Notify.ask();
+    Wake.on();
+    lastPaint = ""; renderFocus();
+  },
+  fxPause() { Engine.pause(); renderFocus(); },
+  fxResume() { Engine.resume(); Sound.resume(); renderFocus(); },
+  fxAdvance() {
+    Engine.advance();
+    Sound.resume();
+    if (!S.settings.audioMuted && !CustomAudio.hasSound() && S.settings.ambient !== "none" && !Sound.playing) Sound.start(S.settings.ambient);
+    renderFocus();
+  },
+  fxSkipBreak() { Engine.skipBreak(); renderFocus(); },
+  fxFinish() { Engine.finish(); afterRun(); },
+  fxAskEnd() {
+    const remain = fmtClock(Engine.remaining());
+    ask("End this session?", remain + " left. Time you've already focused is saved.", "End session", () => {
+      Engine.end(); closeModal(); afterRun();
+    }, true);
+  },
+  fxExit() {
+    if (Engine.state && Engine.state.stage === "running") { actions.fxAskEnd(); return; }
+    Engine.finish(); afterRun();
+  },
+  fxSound() {
+    S.settings.audioMuted = !S.settings.audioMuted;
+    persist("settings");
+
+    if (S.settings.audioMuted) {
+      Sound.stop();
+      /* Mute must pause the custom track without resetting its position. */
+      CustomAudio.pauseForMute();
+      toast("Audio muted.");
+    } else if (Engine.active && Engine.state.stage === "running") {
+      Sound.resume();
+      /* Resume the custom song from its paused position — never restart it. */
+      if (CustomAudio.hasSound()) CustomAudio.play({ restart: false });
+      else if (S.settings.ambient !== "none") Sound.start(S.settings.ambient);
+      toast("Audio on.");
+    }
+
+    lastPaint = "";
+    renderFocus();
+  },
+ 
+  /* tasks */
+  addTask() {
+    const title = el("tTitle").value.trim();
+    if (!title) { toast("Give the task a name first."); el("tTitle").focus(); return; }
+    const est = clamp(parseInt(el("tEst").value, 10) || 1, 1, 12);
+    S.tasks.push({ id: uid(), subjectId: el("tSubj").value, title, estSessions: est, doneSessions: 0, done: false });
+    persist("tasks"); render(); toast("Task added.");
+  },
+  toggleTask(v) {
+    const t = taskById(v); if (!t) return;
+    t.done = !t.done; persist("tasks"); render();
+  },
+  delTask(v) {
+    const t = taskById(v); if (!t) return;
+    ask("Delete task?", '"' + t.title + '" will be removed. Study time already logged stays.', "Delete", () => {
+      S.tasks = S.tasks.filter(x => x.id !== v);
+      if (S.draft.taskId === v) S.draft.taskId = null;
+      persist(); closeModal(); render();
+    }, true);
+  },
+ 
+  /* history + settings */
+  range(v) { histRange = v; render(); },
+  toggle(v) {
+    S.settings[v] = !S.settings[v]; persist("settings");
+    if (v === "animations") applyTheme();
+    if (v === "keepAwake") { S.settings.keepAwake ? Wake.on() : Wake.off(); }
+    render();
+  },
+  setnum(v) {
+    const [k, n] = v.split(":");
+    S.settings[k] = parseInt(n, 10);
+    if (k === "focusMin" && S.draft.mode === "pomodoro") S.draft.minutes = S.settings.focusMin;
+    if (k === "sessions") S.draft.sessions = S.settings.sessions;
+    persist();
+    if (el("ob").classList.contains("on")) renderOb(); else render();
+  },
+  theme(v) { S.settings.theme = v; persist("settings"); applyTheme(); render(); },
+  ambient(v) {
+    S.settings.ambient = v; persist("settings");
+    if (v === "none" || S.settings.audioMuted || CustomAudio.hasSound()) Sound.stop();
+    else { Sound.resume(); Sound.start(v); if (!Engine.active) setTimeout(() => { if (!Engine.active) Sound.stop(); }, 4200); }
+    render();
+  },
+  askNotify() { Notify.ask().then(r => { render(); toast(r === "granted" ? "Notifications on." : "Notifications stayed off."); }); },
+  replayIntro() { obStep = 0; el("ob").classList.add("on"); renderOb(); },
+  resetAll() {
+    ask("Erase all data?", "Sessions, tasks, subjects and settings on this device. This can't be undone.", "Erase everything", () => {
+      ["onboarded", "subjects", "tasks", "sessions", "settings", "draft", "run"].forEach(k => Store.del("lumora." + k));
+      closeModal(); location.reload();
+    }, true);
+  },
+ 
+  /* onboarding + modal */
+  obNext() {
+    if (obStep >= 4) {
+      S.onboarded = true; Store.set("lumora.onboarded", true);
+      el("ob").classList.remove("on"); render(); actions.start(); return;
+    }
+    obStep++; renderOb();
+  },
+  obBack() { obStep = Math.max(0, obStep - 1); renderOb(); },
+  obSkip() { S.onboarded = true; Store.set("lumora.onboarded", true); el("ob").classList.remove("on"); render(); },
+  modalYes() { const keep = modalConfirm && modalConfirm(); if (!keep) closeModal(); },
+  modalNo() { closeModal(); },
+};
+ 
+/* ============================================================
+   CUSTOM AUDIO CONTROLS
+   ============================================================ */
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-custom-action]");
+  if (!button) return;
+
+  const action = button.getAttribute("data-custom-action");
+
+  if (action === "play") CustomAudio.play();
+  if (action === "stop") CustomAudio.stop();
+  if (action === "remove") CustomAudio.remove();
+});
+
+document.addEventListener("change", (e) => {
+  if (!e.target || e.target.id !== "customSoundFile") return;
+
+  const file = e.target.files && e.target.files[0];
+  if (file) CustomAudio.save(file);
+
+  /* Allows the same file to be selected again later. */
+  e.target.value = "";
+});
+ 
+/* delegated events */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-a]");
+  if (!b) return;
+  const a = b.getAttribute("data-a"), v = b.getAttribute("data-v");
+  if (actions[a]) { e.preventDefault(); actions[a](v); }
+});
+document.addEventListener("input", (e) => {
+  if (e.target.getAttribute && e.target.getAttribute("data-a") === "vol") {
+    S.settings.ambientVol = clamp(e.target.value / 100, 0, 1);
+    Sound.setVol(S.settings.ambientVol);
+    CustomAudio.setVolume(S.settings.ambientVol);
+    persist("settings");
+    const lab = e.target.closest(".set"); if (lab) lab.querySelector(".sl span").textContent = Math.round(S.settings.ambientVol * 100) + "%";
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el("modal").classList.contains("on")) closeModal();
+  if (e.key === "Enter" && el("modal").classList.contains("on") && el("mInput")) { e.preventDefault(); actions.modalYes(); }
+  if (e.target.id === "tTitle" && e.key === "Enter") actions.addTask();
+  if (e.code === "Space" && Engine.active && Engine.state.stage === "running" && !/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.target.tagName)) {
+    e.preventDefault(); Engine.paused ? actions.fxResume() : actions.fxPause();
+  }
+});
+ 
+/* ============================================================
+   12. RUN LOOP — interval for truth, rAF for smoothness
+   ============================================================ */
+let autoT = null;
+function afterRun() {
+  clearTimeout(autoT);
+  Sound.stop(); CustomAudio.stop(); Wake.off(); stopParticles();
+  lastPaint = ""; renderFocus(); render();
+}
+Engine.onChange((ev) => {
+  if (ev === "sessionDone") {
+    Sound.focusDone();
+    Notify.send("Focus session complete.", "focus");
+    /* Keep the custom song playing through the completion screen and into the next step. */
+    Sound.stop();
+  }
+  if (ev === "breakDone") {
+    Sound.breakDone();
+    Notify.send("Your break is over.", "break");
+    /* Custom audio continues seamlessly into the next focus session. */
+  }
+  if (ev === "routineDone") { Sound.routineDone(); Notify.send("Study routine complete.", "focus"); Sound.stop(); CustomAudio.stop(); Wake.off(); }
+  if (ev === "advance") {
+    const s = Engine.step();
+    if (!S.settings.audioMuted) {
+      if (CustomAudio.hasSound()) {
+        /* Do not restart the song: continue from its current position. */
+        CustomAudio.play({ restart: false });
+      } else if (s && s.type === "focus" && S.settings.ambient !== "none") {
+        Sound.start(S.settings.ambient);
+      } else if (s && s.type !== "focus") {
+        Sound.stop();
+      }
+    }
+  }
+  if (ev === "start" || ev === "resume") {
+    Wake.on();
+    if (!S.settings.audioMuted) {
+      /* A fresh start begins the track; resume continues from the paused position. */
+      if (CustomAudio.hasSound()) {
+        CustomAudio.play({ restart: ev === "start" });
+      } else if (S.settings.ambient !== "none") {
+        Sound.start(S.settings.ambient);
+      }
+    }
+  }
+  // auto-transitions: show the completion panel briefly, then move on
+  clearTimeout(autoT);
+  if (ev === "sessionDone" && S.settings.autoBreak && Engine.nextStep()) autoT = setTimeout(() => { if (Engine.active && Engine.state.stage === "sessionDone") actions.fxAdvance(); }, 3600);
+  if (ev === "breakDone" && S.settings.autoFocus && Engine.nextStep()) autoT = setTimeout(() => { if (Engine.active && Engine.state.stage === "breakDone") actions.fxAdvance(); }, 2600);
+  if (ev !== "end") { lastPaint = ""; renderFocus(); }
+});
+ 
+let heartbeat = setInterval(() => {
+  if (!Engine.active) return;
+  Engine.tick();
+  if (Engine.active && Engine.state.stage === "running" && !document.hidden) paintTime();
+}, 250);
+ 
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { stopParticles(); return; }
+  Wake.on();
+  if (Engine.active) { Engine.tick(); lastPaint = ""; renderFocus(); }   // recompute from timestamps
+  render();
+});
+window.addEventListener("pageshow", () => { if (Engine.active) { Engine.tick(); lastPaint = ""; renderFocus(); } });
+window.addEventListener("beforeunload", () => { Sound.stop(); CustomAudio.stop(); Wake.off(); });
+ 
+/* expose the engine + state for debugging and automated testing.
+   The UI never reads from here; it exists so the timer can be driven headlessly. */
+window.Lumora = { Engine, Stats, Sound, CustomAudio, get state() { return S; }, actions, render, renderFocus, persist };
+ 
+/* ============================================================
+   13. BOOT
+   ============================================================ */
+applyTheme();
+renderNav();
+render();
+CustomAudio.init();
+CustomAudio.syncVolume();
+ 
+if (Engine.restore()) {
+  Engine.tick();
+  renderFocus();
+  if (Engine.state && Engine.state.stage === "running" && Engine.step().type === "focus" && S.settings.ambient !== "none") {
+    // browsers block audio until a gesture — start it on the first tap
+    document.addEventListener("click", function once() {
+      Sound.resume();
+      if (!S.settings.audioMuted) {
+        if (CustomAudio.hasSound()) CustomAudio.play();
+        else if (S.settings.ambient !== "none") Sound.start(S.settings.ambient);
+      }
+      document.removeEventListener("click", once);
+    }, { once: true });
+  }
+  toast("Picked up where you left off.");
+} else if (!S.onboarded) {
+  el("ob").classList.add("on");
+  renderOb();
+}
+ 
+/* Register the service worker so the app installs and works offline.
+   Skipped automatically on file:// (opening the file directly) since
+   service workers require http(s) — the app still runs fine either way. */
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => { });
+  });
+}
+})();
+ 
+</script>
+</body>
+</html>
+ 
