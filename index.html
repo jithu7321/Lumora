@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
- <meta name="google-site-verification" content="WMEbByhfgjPFRAitymee5yM8vwcFG7vFSZ4H9qk9PoA" />
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lumora — A quiet room for focused minds</title>
@@ -528,14 +527,12 @@ const Stats = {
     const days = {};
     S.sessions.forEach(s => { days[dayKey(s.completedAt)] = true; });
     const keys = Object.keys(days).sort();
-    // longest run of consecutive days
     let longest = 0, run = 0, prev = null;
     keys.forEach(k => {
       const t = new Date(k + "T00:00:00").getTime();
       run = (prev !== null && t - prev === 86400000) ? run + 1 : 1;
       prev = t; longest = Math.max(longest, run);
     });
-    // current streak counts back from today (or yesterday if nothing today yet)
     let cur = 0, cursor = startOfDay(now());
     if (!days[dayKey(cursor)]) cursor -= 86400000;
     while (days[dayKey(cursor)]) { cur++; cursor -= 86400000; }
@@ -663,6 +660,7 @@ const Sound = (function () {
     try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) { }
   }
 })();
+ 
 /* ============================================================
    CUSTOM USER AUDIO
    ============================================================ */
@@ -670,240 +668,141 @@ const CustomAudio = (() => {
   const DB_NAME = "LumoraCustomAudioDB";
   const STORE_NAME = "audio";
   const AUDIO_KEY = "custom";
-
+ 
   let audio = null;
   let objectUrl = "";
   let fileName = "";
   let dbPromise = null;
-
+ 
   function openDB() {
     if (dbPromise) return dbPromise;
-
     dbPromise = new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        reject(new Error("IndexedDB is not supported by this browser."));
-        return;
-      }
-
+      if (!window.indexedDB) { reject(new Error("IndexedDB is not supported.")); return; }
       const request = indexedDB.open(DB_NAME, 1);
-
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME);
-        }
+        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
       };
-
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error("Could not open audio storage."));
     });
-
     return dbPromise;
   }
-
+ 
   async function dbGet() {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).get(AUDIO_KEY);
       request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error || new Error("Could not read audio storage."));
+      request.onerror = () => reject(request.error);
     });
   }
-
+ 
   async function dbPut(record) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).put(record, AUDIO_KEY);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error("Could not save audio."));
-      tx.onabort = () => reject(tx.error || new Error("Could not save audio."));
+      tx.onerror = () => reject(tx.error);
     });
   }
-
+ 
   async function dbDelete() {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).delete(AUDIO_KEY);
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error("Could not remove audio."));
-      tx.onabort = () => reject(tx.error || new Error("Could not remove audio."));
+      tx.onerror = () => reject(tx.error);
     });
   }
-
+ 
   function updateStatus() {
     const status = document.getElementById("customSoundStatus");
     if (!status) return;
-    status.textContent = fileName
-      ? "Selected: " + fileName
-      : "No custom audio selected";
+    status.textContent = fileName ? "Selected: " + fileName : "No custom audio selected";
   }
-
+ 
   function destroyAudio() {
-    if (audio) {
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-      } catch (e) { }
-      audio = null;
-    }
-
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = "";
-    }
+    if (audio) { try { audio.pause(); audio.currentTime = 0; } catch (e) { } audio = null; }
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = ""; }
   }
-
+ 
   async function ensureAudio() {
     if (audio) return audio;
-
     const record = await dbGet();
     if (!record || !record.blob) return null;
-
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(record.blob);
-
     audio = new Audio(objectUrl);
     audio.loop = true;
     audio.preload = "auto";
     audio.volume = S.settings.ambientVol;
-
     fileName = record.name || fileName || "Custom audio";
     updateStatus();
-
     return audio;
   }
-
+ 
   async function save(file) {
     if (!file) return;
-
-    if (!file.type || !file.type.startsWith("audio/")) {
-      toast("Please select an audio file.");
-      return;
-    }
-
+    if (!file.type || !file.type.startsWith("audio/")) { toast("Please select an audio file."); return; }
     try {
-      await dbPut({
-        blob: file,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        savedAt: Date.now()
-      });
-
+      await dbPut({ blob: file, name: file.name, type: file.type, size: file.size, savedAt: Date.now() });
       destroyAudio();
       fileName = file.name;
       updateStatus();
       toast("Custom audio added.");
-    } catch (e) {
-      console.error("Lumora custom audio save failed:", e);
-      toast("Could not save this audio file on your device.");
-    }
+    } catch (e) { toast("Could not save audio file."); }
   }
-
+ 
   async function play(options = {}) {
     if (S.settings.audioMuted) return;
     try {
       const a = await ensureAudio();
-
-      if (!a) {
-        toast("Choose a custom audio file first.");
-        return;
-      }
-
-      /* A new focus session must always start the custom track from the
-         beginning. This also fixes the case where the previous session
-         reached the end of the track before the next session started. */
-      if (options.restart !== false) {
-        try {
-          a.pause();
-          a.currentTime = 0;
-        } catch (e) { }
-      }
-
+      if (!a) { toast("Choose a custom audio file first."); return; }
+      if (options.restart !== false) { try { a.pause(); a.currentTime = 0; } catch (e) { } }
       a.loop = true;
       a.volume = S.settings.ambientVol;
-
-      /* If the browser has moved the media element to an ended state,
-         explicitly reload it before starting the next session. */
-      if (a.ended) {
-        try { a.load(); } catch (e) { }
-        try { a.currentTime = 0; } catch (e) { }
-      }
-
+      if (a.ended) { try { a.load(); a.currentTime = 0; } catch (e) { } }
       await a.play();
-    } catch (e) {
-      console.error("Lumora custom audio playback failed:", e);
-      toast("Tap Test again to allow audio playback.");
-    }
+    } catch (e) { toast("Tap Test again to allow audio playback."); }
   }
-
+ 
   function stop() {
     if (!audio) return;
-    try {
-      audio.pause();
-      audio.currentTime = 0;
-    } catch (e) { }
+    try { audio.pause(); audio.currentTime = 0; } catch (e) { }
   }
-
-  /* Mute only pauses the track. It deliberately does NOT reset currentTime. */
+ 
   function pauseForMute() {
     if (!audio) return;
     try { audio.pause(); } catch (e) { }
   }
-
+ 
   async function remove() {
     stop();
     destroyAudio();
-
     try {
       await dbDelete();
       fileName = "";
       updateStatus();
       toast("Custom audio removed.");
-    } catch (e) {
-      console.error("Lumora custom audio remove failed:", e);
-      toast("Could not remove the custom audio.");
-    }
+    } catch (e) { toast("Could not remove audio."); }
   }
-
-  function hasSound() {
-    return !!fileName;
-  }
-
-  function setVolume(v) {
-    if (audio) audio.volume = clamp(v, 0, 1);
-  }
-
-  async function syncVolume() {
-    setVolume(S.settings.ambientVol);
-  }
-
+ 
+  function hasSound() { return !!fileName; }
+  function setVolume(v) { if (audio) audio.volume = clamp(v, 0, 1); }
+  async function syncVolume() { setVolume(S.settings.ambientVol); }
   async function init() {
     try {
       const record = await dbGet();
       fileName = record && record.name ? record.name : "";
       updateStatus();
-    } catch (e) {
-      console.error("Lumora custom audio initialization failed:", e);
-      updateStatus();
-    }
+    } catch (e) { updateStatus(); }
   }
-
-  return {
-    play,
-    stop,
-    pauseForMute,
-    save,
-    remove,
-    hasSound,
-    setVolume,
-    syncVolume,
-    updateStatus,
-    init
-  };
+ 
+  return { play, stop, pauseForMute, save, remove, hasSound, setVolume, syncVolume, updateStatus, init };
 })();
  
 /* ============================================================
@@ -935,11 +834,11 @@ const Wake = {
 };
  
 /* ============================================================
-   6. TIMER ENGINE — pure, timestamp-driven, UI-independent
+   6. TIMER ENGINE
    ============================================================ */
 const Engine = (function () {
   const KEY = "lumora.run";
-  let st = null;              // run state, or null when idle
+  let st = null;
   let listeners = [];
   const emit = (ev) => listeners.forEach(f => f(ev, st));
  
@@ -968,12 +867,10 @@ const Engine = (function () {
     onChange(fn) { listeners.push(fn); },
     get state() { return st; },
     get active() { return !!st; },
- 
     step() { return st ? st.plan[st.idx] : null; },
     focusStepCount() { return st ? st.plan.filter(p => p.type === "focus").length : 0; },
     focusStepNumber() { return st ? st.plan.slice(0, st.idx + 1).filter(p => p.type === "focus").length : 0; },
     nextStep() { return st && st.plan[st.idx + 1] ? st.plan[st.idx + 1] : null; },
- 
     elapsed() {
       if (!st) return 0;
       const end = st.pausedAt || now();
@@ -987,7 +884,6 @@ const Engine = (function () {
       const s = api.step();
       return s ? clamp(api.elapsed() / s.ms, 0, 1) : 0;
     },
- 
     start(cfg) {
       const plan = buildPlan(cfg);
       if (!plan.length || !plan[0].ms || plan[0].ms < 1000) { toast("Choose a duration of at least 1 minute."); return false; }
@@ -999,7 +895,6 @@ const Engine = (function () {
       };
       save(); emit("start"); return true;
     },
- 
     pause() {
       if (!st || st.stage !== "running" || st.pausedAt) return;
       st.pausedAt = now(); save(); emit("pause");
@@ -1010,8 +905,6 @@ const Engine = (function () {
       st.pausedAt = null; save(); emit("resume");
     },
     get paused() { return !!(st && st.pausedAt); },
- 
-    /* move to the next step and start it */
     advance(atTs) {
       if (!st) return;
       if (st.idx + 1 >= st.plan.length) { st.stage = "routineDone"; save(); emit("routineDone"); return; }
@@ -1021,19 +914,15 @@ const Engine = (function () {
       st.stage = "running";
       save(); emit("advance");
     },
- 
-    /* skip the break we're on (or the one coming up) and go to the next focus */
     skipBreak() {
       if (!st) return;
       let i = st.idx;
-      if (st.plan[i].type === "focus") i++;             // from the "session complete" screen
+      if (st.plan[i].type === "focus") i++;
       while (st.plan[i] && st.plan[i].type !== "focus") i++;
       if (!st.plan[i]) { st.stage = "routineDone"; save(); emit("routineDone"); return; }
       st.idx = i; st.startedAt = now(); st.pausedAt = null; st.pausedMs = 0; st.stage = "running";
       save(); emit("advance");
     },
- 
-    /* end early. Records partial focus time so nothing is lost. */
     end() {
       if (!st) return;
       const s = api.step();
@@ -1044,17 +933,7 @@ const Engine = (function () {
       const summary = st;
       st = null; save(); emit("end", summary);
     },
- 
     finish() { const s = st; st = null; save(); emit("end", s); },
- 
-    /* The heartbeat. Recomputes purely from timestamps, so it is correct whether
-       it last ran 250ms ago or the laptop was asleep for an hour.
- 
-       Catch-up rule: a break that elapsed while the student was away is fine to
-       roll through — that is what breaks are. A *focus* session is only ever
-       credited if it was the one actually running when they left. We never
-       auto-start a focus session nobody was present for, so the app can't
-       invent study time. */
     tick() {
       if (!st || st.stage !== "running" || st.pausedAt) return;
       let guard = 0;
@@ -1063,35 +942,27 @@ const Engine = (function () {
         const endedAt = st.startedAt + st.pausedMs + s.ms;
         const away = now() - endedAt > 2000;
         const hasNext = !!st.plan[st.idx + 1];
- 
         if (s.type === "focus") {
           recordSession(st, s.ms, endedAt, false);
           st.stage = hasNext ? "sessionDone" : "routineDone";
           save(); emit(hasNext ? "sessionDone" : "routineDone");
-          // roll into the break only when catching up; when live, the UI shows
-          // the completion panel first and advances on its own timer.
           if (away && hasNext && S.settings.autoBreak) api.advance(endedAt); else break;
         } else {
           st.stage = hasNext ? "breakDone" : "routineDone";
           save(); emit(hasNext ? "breakDone" : "routineDone");
-          // never auto-start a focus session during catch-up — wait for them.
           if (!away && hasNext && S.settings.autoFocus) break;
           break;
         }
       }
     },
- 
     restore() {
       const saved = Store.get(KEY, null);
       if (!saved || !saved.plan || !saved.plan.length) return false;
-      // a run older than 12h is stale; drop it rather than showing nonsense
       if (now() - saved.startedAt > 12 * 3600000 && saved.stage === "running") { Store.del(KEY); return false; }
       st = saved;
       return true;
     },
-    setStage(v) { if (st) { st.stage = v; save(); } },
-    /* test hook: shift the run backwards in time, exactly as a real clock would */
-    __jump(ms) { if (st) { st.startedAt -= ms; save(); } }
+    setStage(v) { if (st) { st.stage = v; save(); } }
   };
  
   function recordSession(run, actualMs, completedAt, partial) {
@@ -1108,7 +979,6 @@ const Engine = (function () {
       if (t && !partial) { t.doneSessions = (t.doneSessions || 0) + 1; persist("tasks"); }
     }
   }
- 
   return api;
 })();
  
@@ -1125,7 +995,6 @@ const QUICK = [
   { icon: "💻", name: "Coding", mode: "deep", minutes: 60 },
 ];
  
-/* ---------- toast ---------- */
 let toastT = null;
 function toast(msg) {
   const n = el("toast"); if (!n) return;
@@ -1134,7 +1003,6 @@ function toast(msg) {
 }
 window.toast = toast;
  
-/* ---------- theme ---------- */
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
 function applyTheme() {
   const t = S.settings.theme;
@@ -1145,7 +1013,6 @@ function applyTheme() {
 }
 mq.addEventListener("change", () => { if (S.settings.theme === "system") applyTheme(); });
  
-/* ---------- progress ring ---------- */
 const R = 46, CIRC = 2 * Math.PI * R;
 function ringSVG() {
   return '<svg viewBox="0 0 100 100" aria-hidden="true">' +
@@ -1153,7 +1020,6 @@ function ringSVG() {
     '<circle class="ring-prog" id="ringProg" cx="50" cy="50" r="' + R + '" stroke-dasharray="' + CIRC.toFixed(2) + '" stroke-dashoffset="0"/></svg>';
 }
  
-/* ---------- nav ---------- */
 function renderNav() {
   el("nav").innerHTML = [["home", "Home", I.home], ["tasks", "Tasks", I.task], ["history", "History", I.hist], ["settings", "Settings", I.set]]
     .map(([k, label, icon]) => '<button data-a="tab" data-v="' + k + '"' + (tab === k ? ' aria-current="page"' : "") + '>' + icon + '<span>' + label + '</span></button>').join("");
@@ -1165,7 +1031,6 @@ function go(k) {
   window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
 }
  
-/* ---------- HOME ---------- */
 function renderHome() {
   const d = S.draft, st = S.settings;
   const subj = subjectById(d.subjectId);
@@ -1176,14 +1041,12 @@ function renderHome() {
   const pct = clamp(todayMs / goalMs, 0, 1);
   const byS = Stats.bySubject(today);
   const tasksFor = S.tasks.filter(t => t.subjectId === d.subjectId && !t.done);
- 
   const durs = d.mode === "pomodoro" ? CHOICES.focus : d.mode === "deep" ? CHOICES.deep : CHOICES.count;
   const mins = d.minutes;
   const plannedMs = d.mode === "pomodoro"
     ? (mins * d.sessions + st.shortMin * (d.sessions - 1) + st.longMin) * 60000
     : (d.mode === "deep" ? mins * 60000 + st.longMin * 60000 : mins * 60000);
   const endsAt = new Date(now() + plannedMs);
- 
   const hour = new Date().getHours();
   const greet = hour < 5 ? "Late night session" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
  
@@ -1191,41 +1054,32 @@ function renderHome() {
     '<div class="top"><div class="brand">' + I.logo + 'Lumora</div>' +
     (streak.current > 0 ? '<div class="chip" style="--sc:#F59E0B;pointer-events:none"><span class="dot"></span>' + streak.current + ' day streak</div>' : "") +
     '</div>' +
- 
     '<h1>Ready to study?</h1><p class="sub">' + greet + '. ' + (todayMs > 0 ? fmtDurLong(todayMs) + ' focused today.' : 'Nothing logged yet today.') + '</p>' +
- 
     '<div class="section"><div class="label">Quick start</div><div class="chips grid2">' +
     QUICK.map((q, i) => '<button class="chip" data-a="quick" data-v="' + i + '"><span aria-hidden="true">' + q.icon + '</span><span>' + q.name + ' · ' + q.minutes + 'm</span></button>').join("") +
     '</div></div>' +
- 
     '<div class="section"><div class="label">What are you studying?</div><div class="chips">' +
     S.subjects.map(s => '<button class="chip" style="--sc:' + s.color + '" data-a="subject" data-v="' + s.id + '" aria-pressed="' + (s.id === d.subjectId) + '"><span class="dot"></span>' + esc(s.name) + '</button>').join("") +
     '<button class="chip ghost" data-a="newSubject">+ Add subject</button></div></div>' +
- 
     '<div class="section"><div class="label">Focus style</div>' +
     '<div class="seg" role="group">' +
     [["pomodoro", "Pomodoro"], ["deep", "Deep focus"], ["count", "Countdown"]]
       .map(([k, l]) => '<button data-a="mode" data-v="' + k + '" aria-pressed="' + (d.mode === k) + '">' + l + '</button>').join("") +
     '</div></div>' +
- 
     '<div class="section"><div class="label">Duration</div><div class="chips">' +
     durs.map(m => '<button class="chip" data-a="dur" data-v="' + m + '" aria-pressed="' + (mins === m) + '">' + m + ' min</button>').join("") +
     '<button class="chip ghost" data-a="customDur"' + (durs.indexOf(mins) === -1 ? ' aria-pressed="true"' : '') + '>' + (durs.indexOf(mins) === -1 ? 'Custom · ' + mins + ' min' : 'Custom') + '</button></div></div>' +
- 
     (d.mode === "pomodoro" ? '<div class="section"><div class="label">Sessions</div><div class="chips">' +
       [2, 3, 4, 5, 6, 8].map(n => '<button class="chip" data-a="sessions" data-v="' + n + '" aria-pressed="' + (d.sessions === n) + '">' + n + '</button>').join("") +
       '</div></div>' : "") +
- 
     (tasksFor.length ? '<div class="section"><div class="label">Working on (optional)</div><div class="chips">' +
       tasksFor.slice(0, 6).map(t => '<button class="chip" data-a="task" data-v="' + t.id + '" aria-pressed="' + (d.taskId === t.id) + '">' + esc(t.title) + (t.estSessions ? ' · ' + (t.doneSessions || 0) + '/' + t.estSessions : "") + '</button>').join("") +
       (d.taskId ? '<button class="chip ghost" data-a="task" data-v="">Clear</button>' : "") +
       '</div></div>' : "") +
- 
     '<button class="start" data-a="start">Start focus · ' + esc(subj.name) + '</button>' +
     '<p class="sub" style="text-align:center;margin:12px 0 30px;font-size:13px">' +
     (d.mode === "pomodoro" ? d.sessions + ' session' + (d.sessions > 1 ? 's' : '') + ' · ' + st.shortMin + ' min breaks · ' : d.mode === "deep" ? 'One long session · ' : 'Single countdown · ') +
     'ends around ' + endsAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + '</p>' +
- 
     '<h2>Today</h2>' +
     '<div class="card" style="margin-bottom:14px">' +
     '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">' +
@@ -1234,14 +1088,12 @@ function renderHome() {
     '<div class="meter' + (pct >= 1 ? ' done' : '') + '"><i style="width:' + (pct * 100).toFixed(1) + '%"></i></div>' +
     '<p style="margin:10px 0 0;font-size:13px;color:var(--text-3)">' + (pct >= 1 ? "Goal reached. Keep going if you like." : todayMs > 0 ? "Keep going." : "Your first session starts the day.") + '</p>' +
     '</div>' +
- 
     '<div class="stats" style="margin-bottom:14px">' +
     stat(fmtDurLong(todayMs), "Focus time") +
     stat(String(today.length), "Sessions") +
     stat(String(today.filter(s => !s.partial).length), "Completed") +
     stat(streak.current + (streak.current === 1 ? " day" : " days"), "Streak") +
     '</div>' +
- 
     (byS.length ? '<div class="card"><h2>Today\'s subjects</h2><div class="list">' +
       byS.map(r => '<div class="line"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:' + r.subject.color + ';flex:none"></span>' +
         '<span class="nm">' + esc(r.subject.name) + '</span><span class="vl">' + fmtDurLong(r.ms) + '</span></div>').join("") +
@@ -1250,7 +1102,6 @@ function renderHome() {
 }
 function stat(big, small) { return '<div class="stat"><b>' + esc(big) + '</b><span>' + esc(small) + '</span></div>'; }
  
-/* ---------- TASKS ---------- */
 function renderTasks() {
   const groups = S.subjects.map(s => ({ s, items: S.tasks.filter(t => t.subjectId === s.id) })).filter(g => g.items.length);
   el("s-tasks").innerHTML =
@@ -1278,7 +1129,6 @@ function renderTasks() {
       : '<div class="card"><div class="empty"><b>Nothing planned</b>Add something you want to study.</div></div>');
 }
  
-/* ---------- HISTORY ---------- */
 let histRange = "today";
 function renderHistory() {
   const t0 = startOfDay(now());
@@ -1301,38 +1151,32 @@ function renderHistory() {
   el("s-history").innerHTML =
     '<div class="top"><div class="brand">' + I.logo + 'History</div></div>' +
     '<h1>Your focus</h1><p class="sub">' + fmtDurLong(allMs) + ' across ' + S.sessions.length + ' session' + (S.sessions.length === 1 ? "" : "s") + ' all time.</p>' +
- 
     '<div class="seg" style="margin-bottom:18px">' +
     [["today", "Today"], ["yesterday", "Yesterday"], ["week", "Week"], ["month", "Month"]]
       .map(([k, l]) => '<button data-a="range" data-v="' + k + '" aria-pressed="' + (histRange === k) + '">' + l + '</button>').join("") +
     '</div>' +
- 
     '<div class="stats" style="margin-bottom:18px">' +
     stat(fmtDurLong(total), "Focus time") +
     stat(String(list.length), "Sessions") +
     stat(list.length ? fmtDur(avg) : "—", "Average") +
     stat(String(byS.length), "Subjects") +
     '</div>' +
- 
     '<div class="card" style="margin-bottom:14px"><h2>This week</h2>' +
     '<div class="week">' + week.map(w =>
       '<div class="col' + (w.today ? " today" : "") + (w.ms === 0 ? " zero" : "") + '">' +
       '<div class="stack"><div class="fill" style="height:' + (w.ms === 0 ? 3 : Math.max(6, (w.ms / peak) * 100)) + '%" title="' + fmtDurLong(w.ms) + '"></div></div>' +
       '<div class="d">' + w.label + '</div></div>').join("") + '</div>' +
     '<p style="margin:12px 0 0;font-size:13px;color:var(--text-3)">Tallest bar: ' + fmtDurLong(peak) + '</p></div>' +
- 
     '<div class="stats" style="margin-bottom:14px">' +
     stat(String(streak.current), "Current streak") +
     stat(String(streak.longest), "Longest streak") +
     '</div>' +
- 
     (byS.length ? '<div class="card"><h2>By subject</h2><div class="list">' +
       byS.map(r => '<div class="line"><span style="width:9px;height:9px;border-radius:50%;background:' + r.subject.color + ';flex:none"></span>' +
         '<span class="nm">' + esc(r.subject.name) + '</span><span class="vl">' + fmtDurLong(r.ms) + '</span></div>').join("") + '</div></div>'
       : '<div class="card"><div class="empty"><b>No study sessions yet</b>Start your first focus session.</div></div>');
 }
  
-/* ---------- SETTINGS ---------- */
 function renderSettings() {
   const st = S.settings;
   const sw = (key, title, desc) => '<div class="set"><div class="sl"><b>' + title + '</b><span>' + desc + '</span></div>' +
@@ -1343,7 +1187,6 @@ function renderSettings() {
   el("s-settings").innerHTML =
     '<div class="top"><div class="brand">' + I.logo + 'Settings</div></div>' +
     '<h1>Settings</h1><p class="sub">Everything here changes how the timer behaves.</p>' +
- 
     '<div class="card" style="margin-bottom:14px"><h2>Timer</h2>' +
     pick("focusMin", "Focus length", CHOICES.focus, "minutes") +
     pick("shortMin", "Short break", CHOICES.short, "minutes") +
@@ -1353,14 +1196,12 @@ function renderSettings() {
     '<div class="seg">' + [60, 120, 180, 240].map(v => '<button data-a="setnum" data-v="dailyGoalMin:' + v + '" aria-pressed="' + (st.dailyGoalMin === v) + '">' + (v / 60) + 'h</button>').join("") +
     '<button data-a="editGoal">Custom</button></div></div>' +
     '</div>' +
- 
     '<div class="card" style="margin-bottom:14px"><h2>Appearance</h2>' +
     '<div class="set"><div class="sl"><b>Theme</b><span>Dark is built for late study</span></div><div class="seg">' +
     [["light", "Light"], ["dark", "Dark"], ["system", "System"]].map(([k, l]) => '<button data-a="theme" data-v="' + k + '" aria-pressed="' + (st.theme === k) + '">' + l + '</button>').join("") +
     '</div></div>' +
     sw("animations", "Animations", "Turn off for a still background") +
     '</div>' +
- 
     '<div class="card" style="margin-bottom:14px"><h2>Sound</h2>' +
     '<div class="set" style="flex-wrap:wrap"><div class="sl" style="flex-basis:100%"><b>Ambient sound</b><span>Plays only while you are focusing</span></div>' +
     '<div class="chips" style="margin-top:10px">' + Object.keys(Sound.LABELS).map(k =>
@@ -1369,35 +1210,31 @@ function renderSettings() {
     '<input type="range" min="0" max="100" value="' + Math.round(st.ambientVol * 100) + '" data-a="vol" aria-label="Ambient volume" style="width:140px"></div>' +
     sw("completionSound", "Completion chime", "A short tone when a session ends") +
     sw("haptics", "Vibration", "Where the device supports it") +
-    /* Custom audio controls */
-'<div class="set" style="flex-wrap:wrap">' +
-  '<div class="sl" style="flex-basis:100%">' +
-    '<b>Custom audio</b>' +
-    '<span id="customSoundStatus">No custom audio selected</span>' +
-  '</div>' +
-  '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
-    '<label class="btn" for="customSoundFile" style="cursor:pointer">Choose audio</label>' +
-    '<input id="customSoundFile" type="file" accept="audio/*" style="display:none">' +
-    '<button class="btn" type="button" data-custom-action="play">▶ Test</button>' +
-    '<button class="btn" type="button" data-custom-action="stop">■ Stop</button>' +
-    '<button class="btn danger" type="button" data-custom-action="remove">Remove</button>' +
-  '</div>' +
-'</div>' +
+    '<div class="set" style="flex-wrap:wrap">' +
+      '<div class="sl" style="flex-basis:100%">' +
+        '<b>Custom audio</b>' +
+        '<span id="customSoundStatus">No custom audio selected</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+        '<label class="btn" for="customSoundFile" style="cursor:pointer">Choose audio</label>' +
+        '<input id="customSoundFile" type="file" accept="audio/*" style="display:none">' +
+        '<button class="btn" type="button" data-custom-action="play">▶ Test</button>' +
+        '<button class="btn" type="button" data-custom-action="stop">■ Stop</button>' +
+        '<button class="btn danger" type="button" data-custom-action="remove">Remove</button>' +
+      '</div>' +
     '</div>' +
- 
+    '</div>' +
     '<div class="card" style="margin-bottom:14px"><h2>Behaviour</h2>' +
     sw("autoBreak", "Start breaks automatically", "Move straight into the break") +
     sw("autoFocus", "Start next session automatically", "Skip the ready screen") +
     sw("keepAwake", "Keep the screen awake", "During a focus session") +
     '</div>' +
- 
     '<div class="card" style="margin-bottom:14px"><h2>Notifications</h2>' +
     sw("notifyFocus", "Focus complete", "Tell me when a session ends") +
     sw("notifyBreak", "Break complete", "Tell me when a break ends") +
     '<div class="set"><div class="sl"><b>Permission</b><span>' + (Notify.supported ? (Notification.permission === "granted" ? "Allowed" : Notification.permission === "denied" ? "Blocked in your browser settings" : "Not asked yet") : "Not supported here") + '</span></div>' +
     (Notify.supported && Notification.permission === "default" ? '<button class="btn" data-a="askNotify">Allow</button>' : "") + '</div>' +
     '</div>' +
- 
     '<div class="card"><h2>Data</h2>' +
     '<div class="set"><div class="sl"><b>Stored on this device</b><span>' + S.sessions.length + ' sessions · ' + S.tasks.length + ' tasks · ' + S.subjects.length + ' subjects</span></div></div>' +
     '<div class="row" style="margin-top:12px"><button class="btn" data-a="replayIntro">Replay intro</button>' +
@@ -1406,7 +1243,6 @@ function renderSettings() {
   CustomAudio.updateStatus();
 }
  
-/* ---------- render router ---------- */
 function render() {
   if (tab === "home") renderHome();
   else if (tab === "tasks") renderTasks();
@@ -1444,7 +1280,6 @@ function renderFocus() {
   const bg = '<div class="fxbg" aria-hidden="true"><span></span><span></span><span></span></div><canvas id="fxCanvas" aria-hidden="true"></canvas>';
  
   let body = "";
- 
   if (st.stage === "running") {
     const dots = total > 1 ? '<div class="dots" aria-hidden="true">' + Array.from({ length: total }, (_, i) =>
       '<i class="' + (i + 1 < n ? "done" : i + 1 === n ? "now" : "") + '"></i>').join("") + '</div>' : "";
@@ -1462,9 +1297,7 @@ function renderFocus() {
         (isBreak ? '<button class="fbtn quiet" data-a="fxSkipBreak">Skip break</button>' : '<button class="fbtn quiet" data-a="fxAskEnd">Finish early</button>') + '</div>') +
       '<div class="fxnext">' + (nextStep ? (nextStep.type === "focus" ? "Next: " + Math.round(nextStep.ms / 60000) + " min focus" : "Next break: " + Math.round(nextStep.ms / 60000) + " minutes") : "Last one — then you're done") + '</div>' +
       '</div>';
-  }
- 
-  else if (st.stage === "sessionDone") {
+  } else if (st.stage === "sessionDone") {
     const breakNext = nextStep && nextStep.type !== "focus";
     body = '<div class="fxwrap"><div class="panel">' +
       '<div class="seal">' + I.check + '</div>' +
@@ -1476,9 +1309,7 @@ function renderFocus() {
         '<button class="fbtn quiet" data-a="fxSkipBreak">Skip the break, keep going</button>'
         : '<div class="fxctl"><button class="fbtn primary" data-a="fxFinish">See summary</button></div>') +
       '</div></div>';
-  }
- 
-  else if (st.stage === "breakDone") {
+  } else if (st.stage === "breakDone") {
     const nxt = nextStep;
     body = '<div class="fxwrap"><div class="panel">' +
       '<div class="seal mint">' + I.check + '</div>' +
@@ -1488,9 +1319,7 @@ function renderFocus() {
         '<div class="fxctl"><button class="fbtn primary" data-a="fxAdvance">Start</button><button class="fbtn" data-a="fxFinish">I\'m done</button></div>'
         : '<div class="fxctl"><button class="fbtn primary" data-a="fxFinish">See summary</button></div>') +
       '</div></div>';
-  }
- 
-  else { /* routineDone */
+  } else {
     const todayList = Stats.onDay(now());
     const runMs = Stats.totalMs(todayList);
     body = '<div class="fxwrap"><div class="panel">' +
@@ -1520,7 +1349,6 @@ function paintTime() {
   if (ring) ring.style.strokeDashoffset = (CIRC * Engine.progress()).toFixed(2);
 }
  
-/* particles — 26 slow motes, paused when hidden or animations off */
 let pRAF = null;
 function startParticles() {
   cancelAnimationFrame(pRAF);
@@ -1538,7 +1366,7 @@ function startParticles() {
   let last = 0;
   function frame(ts) {
     pRAF = requestAnimationFrame(frame);
-    if (ts - last < 33) return; last = ts;            // ~30fps is plenty, saves battery
+    if (ts - last < 33) return; last = ts;
     if (c.clientWidth !== w || c.clientHeight !== h) size();
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#fff";
@@ -1551,7 +1379,6 @@ function startParticles() {
   }
   pRAF = requestAnimationFrame(frame);
 }
-function stopParticles() { cancelAnimationFrame(pRAF); pRAF = null; }
  
 /* ============================================================
    9. MODAL
@@ -1605,7 +1432,6 @@ function renderOb() {
       h: "What are you studying?", p: "Pick one to start with — you can add your own later.",
       body: '<div class="chips">' + S.subjects.map(s => '<button class="chip" data-a="subject" data-v="' + s.id + '" aria-pressed="' + (s.id === d.subjectId) + '"><span class="dot" style="background:' + s.color + '"></span>' + esc(s.name) + '</button>').join("") + '</div>'
     },
-     
     {
       h: "Choose your focus style", p: "You can switch any time.",
       body: [["pomodoro", "Pomodoro", "Short sessions with breaks between. The classic."], ["deep", "Deep focus", "One long uninterrupted stretch, then a real break."], ["count", "Countdown", "A plain timer for exams and practice."]]
@@ -1633,8 +1459,6 @@ function renderOb() {
    ============================================================ */
 const actions = {
   tab: (v) => go(v),
- 
-  /* setup */
   subject(v) {
     S.draft.subjectId = v; S.draft.taskId = null; persist("draft");
     if (el("ob").classList.contains("on")) renderOb(); else render();
@@ -1679,8 +1503,6 @@ const actions = {
       if (el("ob").classList.contains("on")) renderOb(); else render();
     });
   },
- 
-  /* run */
   start() {
     const d = S.draft;
     if (!Engine.start({ mode: d.mode, minutes: d.minutes, sessions: d.sessions, subjectId: d.subjectId, taskId: d.taskId })) return;
@@ -1716,25 +1538,19 @@ const actions = {
   fxSound() {
     S.settings.audioMuted = !S.settings.audioMuted;
     persist("settings");
-
     if (S.settings.audioMuted) {
       Sound.stop();
-      /* Mute must pause the custom track without resetting its position. */
       CustomAudio.pauseForMute();
       toast("Audio muted.");
     } else if (Engine.active && Engine.state.stage === "running") {
       Sound.resume();
-      /* Resume the custom song from its paused position — never restart it. */
       if (CustomAudio.hasSound()) CustomAudio.play({ restart: false });
       else if (S.settings.ambient !== "none") Sound.start(S.settings.ambient);
       toast("Audio on.");
     }
-
     lastPaint = "";
     renderFocus();
   },
- 
-  /* tasks */
   addTask() {
     const title = el("tTitle").value.trim();
     if (!title) { toast("Give the task a name first."); el("tTitle").focus(); return; }
@@ -1754,8 +1570,6 @@ const actions = {
       persist(); closeModal(); render();
     }, true);
   },
- 
-  /* history + settings */
   range(v) { histRange = v; render(); },
   toggle(v) {
     S.settings[v] = !S.settings[v]; persist("settings");
@@ -1786,8 +1600,6 @@ const actions = {
       closeModal(); location.reload();
     }, true);
   },
- 
-  /* onboarding + modal */
   obNext() {
     if (obStep >= 4) {
       S.onboarded = true; Store.set("lumora.onboarded", true);
@@ -1801,15 +1613,10 @@ const actions = {
   modalNo() { closeModal(); },
 };
  
-/* ============================================================
-   CUSTOM AUDIO CONTROLS
-   ============================================================ */
 document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-custom-action]");
   if (!button) return;
-
   const action = button.getAttribute("data-custom-action");
-
   if (action === "play") CustomAudio.play();
   if (action === "stop") CustomAudio.stop();
   if (action === "remove") CustomAudio.remove();
@@ -1817,15 +1624,11 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("change", (e) => {
   if (!e.target || e.target.id !== "customSoundFile") return;
-
   const file = e.target.files && e.target.files[0];
   if (file) CustomAudio.save(file);
-
-  /* Allows the same file to be selected again later. */
   e.target.value = "";
 });
  
-/* delegated events */
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-a]");
   if (!b) return;
@@ -1850,33 +1653,27 @@ document.addEventListener("keydown", (e) => {
   }
 });
  
-/* ============================================================
-   12. RUN LOOP — interval for truth, rAF for smoothness
-   ============================================================ */
 let autoT = null;
 function afterRun() {
   clearTimeout(autoT);
-  Sound.stop(); CustomAudio.stop(); Wake.off(); stopParticles();
+  Sound.stop(); CustomAudio.stop(); Wake.off(); cancelAnimationFrame(pRAF);
   lastPaint = ""; renderFocus(); render();
 }
 Engine.onChange((ev) => {
   if (ev === "sessionDone") {
     Sound.focusDone();
     Notify.send("Focus session complete.", "focus");
-    /* Keep the custom song playing through the completion screen and into the next step. */
     Sound.stop();
   }
   if (ev === "breakDone") {
     Sound.breakDone();
     Notify.send("Your break is over.", "break");
-    /* Custom audio continues seamlessly into the next focus session. */
   }
   if (ev === "routineDone") { Sound.routineDone(); Notify.send("Study routine complete.", "focus"); Sound.stop(); CustomAudio.stop(); Wake.off(); }
   if (ev === "advance") {
     const s = Engine.step();
     if (!S.settings.audioMuted) {
       if (CustomAudio.hasSound()) {
-        /* Do not restart the song: continue from its current position. */
         CustomAudio.play({ restart: false });
       } else if (s && s.type === "focus" && S.settings.ambient !== "none") {
         Sound.start(S.settings.ambient);
@@ -1888,7 +1685,6 @@ Engine.onChange((ev) => {
   if (ev === "start" || ev === "resume") {
     Wake.on();
     if (!S.settings.audioMuted) {
-      /* A fresh start begins the track; resume continues from the paused position. */
       if (CustomAudio.hasSound()) {
         CustomAudio.play({ restart: ev === "start" });
       } else if (S.settings.ambient !== "none") {
@@ -1896,35 +1692,29 @@ Engine.onChange((ev) => {
       }
     }
   }
-  // auto-transitions: show the completion panel briefly, then move on
   clearTimeout(autoT);
   if (ev === "sessionDone" && S.settings.autoBreak && Engine.nextStep()) autoT = setTimeout(() => { if (Engine.active && Engine.state.stage === "sessionDone") actions.fxAdvance(); }, 3600);
   if (ev === "breakDone" && S.settings.autoFocus && Engine.nextStep()) autoT = setTimeout(() => { if (Engine.active && Engine.state.stage === "breakDone") actions.fxAdvance(); }, 2600);
   if (ev !== "end") { lastPaint = ""; renderFocus(); }
 });
  
-let heartbeat = setInterval(() => {
+setInterval(() => {
   if (!Engine.active) return;
   Engine.tick();
   if (Engine.active && Engine.state.stage === "running" && !document.hidden) paintTime();
 }, 250);
  
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) { stopParticles(); return; }
+  if (document.hidden) { cancelAnimationFrame(pRAF); return; }
   Wake.on();
-  if (Engine.active) { Engine.tick(); lastPaint = ""; renderFocus(); }   // recompute from timestamps
+  if (Engine.active) { Engine.tick(); lastPaint = ""; renderFocus(); }
   render();
 });
 window.addEventListener("pageshow", () => { if (Engine.active) { Engine.tick(); lastPaint = ""; renderFocus(); } });
 window.addEventListener("beforeunload", () => { Sound.stop(); CustomAudio.stop(); Wake.off(); });
  
-/* expose the engine + state for debugging and automated testing.
-   The UI never reads from here; it exists so the timer can be driven headlessly. */
 window.Lumora = { Engine, Stats, Sound, CustomAudio, get state() { return S; }, actions, render, renderFocus, persist };
  
-/* ============================================================
-   13. BOOT
-   ============================================================ */
 applyTheme();
 renderNav();
 render();
@@ -1935,7 +1725,6 @@ if (Engine.restore()) {
   Engine.tick();
   renderFocus();
   if (Engine.state && Engine.state.stage === "running" && Engine.step().type === "focus" && S.settings.ambient !== "none") {
-    // browsers block audio until a gesture — start it on the first tap
     document.addEventListener("click", function once() {
       Sound.resume();
       if (!S.settings.audioMuted) {
@@ -1951,17 +1740,12 @@ if (Engine.restore()) {
   renderOb();
 }
  
-/* Register the service worker so the app installs and works offline.
-   Skipped automatically on file:// (opening the file directly) since
-   service workers require http(s) — the app still runs fine either way. */
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => { });
   });
 }
 })();
- 
 </script>
 </body>
 </html>
- 
